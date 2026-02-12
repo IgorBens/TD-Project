@@ -352,6 +352,23 @@ function initApp() {
         return card;
     }
 
+    // ===== Update collector m² totaal =====
+    function updateCollectorM2(kringCard) {
+        // Zoek de parent collector card
+        const collectorBody = kringCard.closest('.card.level-collector')?.querySelector('.card-body');
+        if (!collectorBody) return;
+        const m2Display = collectorBody.querySelector('.collector-m2-totaal');
+        if (!m2Display) return;
+
+        const kringCards = collectorBody.querySelectorAll('.children-container .card.level-kring');
+        let totaal = 0;
+        kringCards.forEach(kc => {
+            const val = parseFloat(kc.querySelector('.kring-m2')?.value) || 0;
+            totaal += val;
+        });
+        m2Display.textContent = totaal.toFixed(1);
+    }
+
     // ===== Add Collector =====
     function addCollector(btn, data) {
         const container = btn.previousElementSibling;
@@ -366,6 +383,8 @@ function initApp() {
 
         const drukVal = data?.druk ?? 4;
         const aantalVal = data?.aantalKringen ?? data?.kringen?.length ?? 0;
+        const randIsoVal = data?.randisolatie ?? '';
+        const uitzetVal = data?.uitzetvoegen ?? '';
 
         body.innerHTML = `
             <div class="field-row cols-4">
@@ -387,6 +406,20 @@ function initApp() {
                 <div>
                     <label>Aantal kringen</label>
                     <input type="number" class="collector-aantal-kringen" placeholder="bijv. 5" min="0" value="${aantalVal}">
+                </div>
+            </div>
+            <div class="field-row cols-3">
+                <div>
+                    <label>m&sup2; totaal</label>
+                    <span class="collector-m2-totaal field-display">0.0</span>
+                </div>
+                <div>
+                    <label>Randisolatie (m)</label>
+                    <input type="number" class="collector-randisolatie" placeholder="Omtrek in m" step="any" min="0" value="${randIsoVal}">
+                </div>
+                <div>
+                    <label>Uitzetvoegen (m)</label>
+                    <input type="number" class="collector-uitzetvoegen" placeholder="Lengte in m" step="any" min="0" value="${uitzetVal}">
                 </div>
             </div>
             <div class="children-container" data-children="kringen"></div>
@@ -413,6 +446,9 @@ function initApp() {
         if (data?.kringen && data.kringen.length > 0) {
             const kringenContainer = body.querySelector('.children-container[data-children="kringen"]');
             data.kringen.forEach(k => addKringToContainer(kringenContainer, k.nummer || 0, k));
+            // Herbereken m² totaal na laden van kringen
+            const firstKring = kringenContainer.querySelector('.card.level-kring');
+            if (firstKring) updateCollectorM2(firstKring);
         }
 
         return card;
@@ -443,12 +479,21 @@ function initApp() {
         const legVal = data?.legpatroon || '';
         const lengteVal = data?.lengte || '';
         const m2Val = data?.m2 || '';
+        const systeemVal = data?.systeem || '';
 
         body.innerHTML = `
-            <div class="field-row cols-4">
+            <div class="field-row cols-5">
                 <div>
                     <label>Nummer</label>
                     <input type="number" class="kring-nummer" placeholder="bijv. 1" min="1" value="${num}">
+                </div>
+                <div>
+                    <label>Systeem</label>
+                    <select class="kring-systeem">
+                        <option value="" ${systeemVal === '' ? 'selected' : ''}>-- Kies --</option>
+                        <option value="staalnet" ${systeemVal === 'staalnet' ? 'selected' : ''}>Staalnet</option>
+                        <option value="tacker" ${systeemVal === 'tacker' ? 'selected' : ''}>Tacker</option>
+                    </select>
                 </div>
                 <div>
                     <label>Legpatroon</label>
@@ -478,6 +523,12 @@ function initApp() {
         nummerInput.addEventListener('input', () => {
             const titleSpan = card.querySelector('.card-title-text');
             titleSpan.textContent = nummerInput.value ? `Kring ${nummerInput.value}` : 'Kring';
+        });
+
+        // Update collector m² totaal bij wijziging
+        const m2Input = body.querySelector('.kring-m2');
+        m2Input.addEventListener('input', () => {
+            updateCollectorM2(card);
         });
 
         container.appendChild(card);
@@ -521,6 +572,8 @@ function initApp() {
                         naam: cBody.querySelector('.collector-naam').value.trim(),
                         druk: parseFloat(cBody.querySelector('.collector-druk').value),
                         aantalKringen: parseInt(cBody.querySelector('.collector-aantal-kringen').value) || 0,
+                        randisolatie: parseFloat(cBody.querySelector('.collector-randisolatie').value) || 0,
+                        uitzetvoegen: parseFloat(cBody.querySelector('.collector-uitzetvoegen').value) || 0,
                         kringen: []
                     };
 
@@ -531,6 +584,7 @@ function initApp() {
                             odoo_id: kCard.dataset.odooId || null,
                             stage: STAGES.KRINGEN,
                             nummer: parseInt(kBody.querySelector('.kring-nummer').value) || 0,
+                            systeem: kBody.querySelector('.kring-systeem').value,
                             legpatroon: kBody.querySelector('.kring-legpatroon').value,
                             lengte: parseFloat(kBody.querySelector('.kring-lengte').value) || 0,
                             m2: parseFloat(kBody.querySelector('.kring-m2').value) || 0
@@ -727,9 +781,12 @@ function initApp() {
                         verdiep: verdiep.nummer,
                         nummer: collector.nummer,
                         druk: collector.druk,
+                        randisolatie: collector.randisolatie,
+                        uitzetvoegen: collector.uitzetvoegen,
                         kringen: collector.kringen.map(k => ({
                             code: `${collector.nummer}.${k.nummer}`,
                             nummer: k.nummer,
+                            systeem: k.systeem,
                             lengte: k.lengte,
                             legpatroon: k.legpatroon,
                             m2: k.m2

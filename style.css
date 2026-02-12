@@ -435,13 +435,27 @@ select:focus {
 .field-row.cols-2 { grid-template-columns: 1fr 1fr; }
 .field-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 .field-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.field-row.cols-5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
 
 @media (max-width: 600px) {
     .field-row.cols-2,
     .field-row.cols-3,
-    .field-row.cols-4 {
+    .field-row.cols-4,
+    .field-row.cols-5 {
         grid-template-columns: 1fr;
     }
+}
+
+/* Computed field display (non-editable) */
+.field-display {
+    display: block;
+    padding: 8px 12px;
+    background: #f0f2f5;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2a9d8f;
 }
 
 .children-container {
