@@ -17,6 +17,11 @@ const STAGES = {
 // =============================================
 
 let authToken = sessionStorage.getItem('td_auth_token') || null;
+let gebouwCounter = 0;
+let rollen = [];
+let rolCounter = 0;
+let selectedProject = null;
+let appInitialized = false;
 
 const loginOverlay = document.getElementById('loginOverlay');
 const appContainer = document.getElementById('appContainer');
@@ -134,12 +139,6 @@ async function authFetch(url, options = {}) {
 // =============================================
 // ===== HOOFDAPPLICATIE =====
 // =============================================
-
-let gebouwCounter = 0;
-let rollen = [];
-let rolCounter = 0;
-let selectedProject = null;
-let appInitialized = false;
 
 function initApp() {
     if (appInitialized) return;
