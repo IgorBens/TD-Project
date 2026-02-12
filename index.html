@@ -18,17 +18,55 @@
             <input type="text" id="projectNaam" placeholder="bijv. Residentie Zonnepark">
         </div>
 
-        <div id="blokkenContainer"></div>
-
-        <div class="actions-bar">
-            <button type="button" class="btn btn-add" id="btnAddBlok">+ Gebouw</button>
+        <!-- Tabs -->
+        <div class="tabs">
+            <button type="button" class="tab active" data-tab="invoer">Invoer</button>
+            <button type="button" class="tab" data-tab="rolverdeling">Rolverdeling</button>
         </div>
 
-        <div class="submit-bar">
-            <button type="button" class="btn btn-save" id="btnOpslaan">Opslaan &amp; Versturen</button>
+        <!-- Tab: Invoer -->
+        <div class="tab-content active" id="tab-invoer">
+            <div id="blokkenContainer"></div>
+
+            <div class="actions-bar">
+                <button type="button" class="btn btn-add" id="btnAddBlok">+ Gebouw</button>
+            </div>
+
+            <div class="submit-bar">
+                <button type="button" class="btn btn-save" id="btnOpslaan">Opslaan &amp; Versturen</button>
+            </div>
+
+            <div id="statusMsg" class="status-msg hidden"></div>
         </div>
 
-        <div id="statusMsg" class="status-msg hidden"></div>
+        <!-- Tab: Rolverdeling -->
+        <div class="tab-content" id="tab-rolverdeling">
+            <div class="rv-layout">
+                <div class="rv-main">
+                    <div class="rv-rollen-config">
+                        <h3>Beschikbare rollen</h3>
+                        <div class="rv-rollen-lijst" id="rvRollenLijst"></div>
+                        <div class="rv-rol-toevoegen">
+                            <select id="rvRolGrootte">
+                                <option value="600">600 m</option>
+                                <option value="240">240 m</option>
+                                <option value="200">200 m</option>
+                                <option value="120">120 m</option>
+                                <option value="100">100 m</option>
+                            </select>
+                            <input type="number" id="rvRolAantal" value="1" min="1" placeholder="Aantal">
+                            <button type="button" class="btn btn-add" id="btnAddRol">+ Rol</button>
+                        </div>
+                    </div>
+
+                    <div id="rvCollectorenOverzicht" class="rv-collectoren-overzicht"></div>
+                </div>
+
+                <div class="rv-sidebar">
+                    <div class="rv-stats" id="rvStats"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>
