@@ -185,19 +185,16 @@ function initApp() {
     btnLaden.addEventListener('click', () => ladenUitOdoo());
     document.getElementById('btnAddRol').addEventListener('click', () => addRol());
 
-    // ===== Project laden via URL parameters =====
-    // Link vanuit Odoo: https://admin.thermoduct.be/?project_id=123&naam=Villa+Gent&adres=Kerkstraat+1
+    // ===== Project laden via URL =====
+    // Link vanuit Odoo: http://46.225.76.46/admin/?122
     function loadProjectFromUrl() {
-        const params = new URLSearchParams(window.location.search);
-        const projectId = params.get('project_id');
-        const naam = params.get('naam') || '';
-        const adres = params.get('adres') || '';
+        const projectId = window.location.search.replace('?', '').trim();
 
-        if (projectId) {
-            selectedProject = { id: parseInt(projectId), naam, adres };
+        if (projectId && !isNaN(projectId)) {
+            selectedProject = { id: parseInt(projectId), naam: '', adres: '' };
             projectOdooIdInput.value = projectId;
-            projectInfoNaam.textContent = naam;
-            projectInfoAdres.textContent = adres;
+            projectInfoNaam.textContent = 'Project laden...';
+            projectInfoAdres.textContent = '';
             projectInfoEl.classList.remove('hidden');
             noProjectMsg.classList.add('hidden');
             btnLaden.disabled = false;
@@ -637,6 +634,16 @@ function initApp() {
 
             const data = await res.json();
 
+            // Update project info uit response
+            if (data.naam) {
+                selectedProject.naam = data.naam;
+                projectInfoNaam.textContent = data.naam;
+            }
+            if (data.adres) {
+                selectedProject.adres = data.adres;
+                projectInfoAdres.textContent = data.adres;
+            }
+
             gebouwenContainer.innerHTML = '';
             gebouwCounter = 0;
 
@@ -650,7 +657,7 @@ function initApp() {
             console.error('Load error:', err);
         } finally {
             btnLaden.disabled = false;
-            btnLaden.textContent = 'Laden uit Odoo';
+            btnLaden.textContent = 'Herladen uit Odoo';
         }
     }
 
