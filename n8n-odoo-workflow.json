@@ -154,8 +154,8 @@
     },
     "Loop Tasks": {
       "main": [
-        [{ "node": "Build Request", "type": "main", "index": 0 }],
-        [{ "node": "Build Response", "type": "main", "index": 0 }]
+        [{ "node": "Build Response", "type": "main", "index": 0 }],
+        [{ "node": "Build Request", "type": "main", "index": 0 }]
       ]
     },
     "Build Request": {
