@@ -14,21 +14,22 @@ const ODOO_PASSWORD = 'jouw-api-key';           // <-- Pas aan (API key of wacht
 // Odoo JSON-RPC helper
 // ============================================
 async function odooCall(service, method, args) {
-  const response = await fetch(`${ODOO_URL}/jsonrpc`, {
+  const response = await $http.request({
     method: 'POST',
+    url: `${ODOO_URL}/jsonrpc`,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    body: {
       jsonrpc: '2.0',
       id: Date.now(),
       method: 'call',
       params: { service, method, args }
-    })
+    },
+    json: true
   });
-  const result = await response.json();
-  if (result.error) {
-    throw new Error(result.error.data?.message || result.error.message || JSON.stringify(result.error));
+  if (response.error) {
+    throw new Error(response.error.data?.message || response.error.message || JSON.stringify(response.error));
   }
-  return result.result;
+  return response.result;
 }
 
 // Authenticeren
