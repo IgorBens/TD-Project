@@ -665,6 +665,11 @@ function initApp() {
                 projectInfoAdres.textContent = projectAdres;
             }
 
+            // Toon project info sectie
+            if (projectNaam || projectAdres) {
+                projectInfoEl.classList.remove('hidden');
+            }
+
             gebouwenContainer.innerHTML = '';
             gebouwCounter = 0;
 
@@ -672,7 +677,7 @@ function initApp() {
                 data.gebouwen.forEach(g => addGebouw(g));
             }
 
-            showStatus(`Project "${selectedProject.naam}" geladen uit Odoo.`, 'success');
+            showStatus(`Project "${selectedProject.naam}" geladen met ${data.gebouwen?.length || 0} gebouw(en).`, 'success');
         } catch (err) {
             showStatus(`Fout bij laden: ${err.message}`, 'error');
             console.error('Load error:', err);

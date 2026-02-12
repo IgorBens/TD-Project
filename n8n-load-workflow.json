@@ -1,0 +1,184 @@
+{
+  "name": "Thermoduct - Laden uit Odoo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "thermoduct-load",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-load"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// Configuratie — pas deze waarden aan!\n// ============================================\nconst ODOO_URL = 'https://jouw-odoo-url.com';\nconst ODOO_DB = 'jouw-database';\nconst ODOO_USER = 'admin';\nconst ODOO_PASSWORD = 'jouw-api-key';\n\nconst input = $input.first().json;\nconst projectId = parseInt(input.query?.project_id) || null;\n\nif (!projectId) {\n  throw new Error('Geen project_id opgegeven.');\n}\n\nreturn [{\n  json: {\n    config: { url: ODOO_URL, db: ODOO_DB, user: ODOO_USER, password: ODOO_PASSWORD },\n    projectId,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 1,\n      method: 'call',\n      params: {\n        service: 'common',\n        method: 'authenticate',\n        args: [ODOO_DB, ODOO_USER, ODOO_PASSWORD, {}]\n      }\n    }\n  }\n}];"
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.url }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Odoo Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bouw request om project info op te halen\nconst authResponse = $input.first().json;\nconst uid = authResponse.result;\nif (!uid) throw new Error('Odoo authenticatie mislukt!');\n\nconst setup = $('Setup').first().json;\nconst { config, projectId } = setup;\n\nreturn [{\n  json: {\n    config, uid, projectId,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 2,\n      method: 'call',\n      params: {\n        service: 'object',\n        method: 'execute_kw',\n        args: [\n          config.db, uid, config.password,\n          'project.project', 'read',\n          [[projectId]],\n          { fields: ['name', 'partner_id'] }\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Prep Read Project",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.url }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000005",
+      "name": "Read Project",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bouw request om alle taken van het project op te halen\nconst projectResponse = $input.first().json;\nconst projectData = (projectResponse.result || [])[0] || {};\n\nconst prev = $('Prep Read Project').first().json;\nconst { config, uid, projectId } = prev;\n\nreturn [{\n  json: {\n    config, uid, projectId,\n    projectNaam: projectData.name || '',\n    projectPartner: projectData.partner_id || '',\n    rpc: {\n      jsonrpc: '2.0',\n      id: 3,\n      method: 'call',\n      params: {\n        service: 'object',\n        method: 'execute_kw',\n        args: [\n          config.db, uid, config.password,\n          'project.task', 'search_read',\n          [[['project_id', '=', projectId]]],\n          { fields: ['name', 'stage_id', 'parent_id', 'description'] }\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000006",
+      "name": "Prep Read Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.url }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000007",
+      "name": "Read Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bouw geneste structuur op basis van parent_id en stage_id\nconst tasksResponse = $input.first().json;\nconst tasks = tasksResponse.result || [];\n\nconst prev = $('Prep Read Tasks').first().json;\nconst { projectId, projectNaam, projectPartner } = prev;\n\n// Maak lookup: id → task\nconst taskMap = {};\nfor (const t of tasks) {\n  taskMap[t.id] = t;\n}\n\n// Categoriseer op stage naam\nconst getStage = (t) => {\n  if (Array.isArray(t.stage_id)) return t.stage_id[1];\n  return '';\n};\n\n// Sorteer taken per stage\nconst blokken = tasks.filter(t => getStage(t) === 'Blokken');\nconst verdiepen = tasks.filter(t => getStage(t) === 'Verdiepen');\nconst collectoren = tasks.filter(t => getStage(t) === 'Collectoren');\nconst kringen = tasks.filter(t => getStage(t) === 'Kringen');\n\n// Helper: haal parent id op\nconst getParentId = (t) => {\n  if (Array.isArray(t.parent_id)) return t.parent_id[0];\n  if (typeof t.parent_id === 'number') return t.parent_id;\n  return null;\n};\n\n// Helper: parse nummer uit naam\nconst parseNummer = (name, prefix) => {\n  if (!name) return '';\n  const after = name.replace(prefix, '').trim();\n  return after;\n};\n\n// Bouw kringen per collector\nconst buildKringen = (collectorId) => {\n  return kringen\n    .filter(k => getParentId(k) === collectorId)\n    .map(k => {\n      const naam = k.name || '';\n      // Parse \"Kring 3\" → nummer 3\n      const numMatch = naam.match(/(\\d+)/);\n      const nummer = numMatch ? parseInt(numMatch[1]) : 0;\n      return {\n        odoo_id: k.id,\n        nummer,\n        legpatroon: '',\n        lengte: 0,\n        m2: 0\n      };\n    })\n    .sort((a, b) => a.nummer - b.nummer);\n};\n\n// Bouw collectoren per verdiep\nconst buildCollectoren = (verdiepId) => {\n  return collectoren\n    .filter(c => getParentId(c) === verdiepId)\n    .map(c => {\n      const naam = c.name || '';\n      // Parse \"Collector 1\" of een custom naam zoals \"App. 3.1\"\n      const numMatch = naam.match(/Collector\\s*(\\d+)/);\n      const nummer = numMatch ? parseInt(numMatch[1]) : 0;\n      // Als de naam niet begint met \"Collector\" is het een custom naam\n      const collectorNaam = numMatch ? naam.replace(/Collector\\s*\\d+\\s*[-—]?\\s*/, '').trim() : naam;\n      const kringenList = buildKringen(c.id);\n      return {\n        odoo_id: c.id,\n        nummer: nummer || 1,\n        naam: collectorNaam,\n        druk: 4,\n        aantalKringen: kringenList.length,\n        kringen: kringenList\n      };\n    })\n    .sort((a, b) => a.nummer - b.nummer);\n};\n\n// Bouw verdiepen per gebouw\nconst buildVerdiepen = (gebouwId) => {\n  return verdiepen\n    .filter(v => getParentId(v) === gebouwId)\n    .map(v => {\n      const naam = v.name || '';\n      // Parse \"Verdieping +00\" → nummer \"+00\"\n      const numMatch = naam.match(/Verdieping\\s*([+-]?\\d+)/);\n      const nummer = numMatch ? numMatch[1] : '0';\n      return {\n        odoo_id: v.id,\n        nummer,\n        collectoren: buildCollectoren(v.id)\n      };\n    })\n    .sort((a, b) => parseInt(a.nummer) - parseInt(b.nummer));\n};\n\n// Bouw gebouwen (top level)\nconst gebouwen = blokken.map(g => {\n  const naam = g.name || '';\n  return {\n    odoo_id: g.id,\n    naam,\n    verdiepen: buildVerdiepen(g.id)\n  };\n});\n\nreturn [{\n  json: {\n    naam: projectNaam,\n    partner_id: projectPartner,\n    gebouwen\n  }\n}];"
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000008",
+      "name": "Build Nested",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000009",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1760, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Setup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Setup": {
+      "main": [
+        [{ "node": "Odoo Auth", "type": "main", "index": 0 }]
+      ]
+    },
+    "Odoo Auth": {
+      "main": [
+        [{ "node": "Prep Read Project", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Read Project": {
+      "main": [
+        [{ "node": "Read Project", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Project": {
+      "main": [
+        [{ "node": "Prep Read Tasks", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Read Tasks": {
+      "main": [
+        [{ "node": "Read Tasks", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Tasks": {
+      "main": [
+        [{ "node": "Build Nested", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Nested": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}
