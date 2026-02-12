@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermoduct Admin Portal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Thermoduct Admin Portal</h1>
+            <p class="subtitle">Projectbeheer &amp; Installatie-invoer</p>
+        </header>
+
+        <div class="project-section">
+            <label for="projectNaam">Projectnaam</label>
+            <input type="text" id="projectNaam" placeholder="bijv. Residentie Zonnepark">
+        </div>
+
+        <div id="blokkenContainer"></div>
+
+        <div class="actions-bar">
+            <button type="button" class="btn btn-add" id="btnAddBlok">+ Blok</button>
+        </div>
+
+        <div class="submit-bar">
+            <button type="button" class="btn btn-save" id="btnOpslaan">Opslaan &amp; Versturen</button>
+        </div>
+
+        <div id="statusMsg" class="status-msg hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
