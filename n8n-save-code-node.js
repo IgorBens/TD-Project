@@ -13,23 +13,19 @@ const ODOO_PASSWORD = 'jouw-api-key';           // <-- Pas aan (API key of wacht
 // ============================================
 // Odoo JSON-RPC helper
 // ============================================
+const axios = require('axios');
+
 async function odooCall(service, method, args) {
-  const response = await $http.request({
-    method: 'POST',
-    url: `${ODOO_URL}/jsonrpc`,
-    headers: { 'Content-Type': 'application/json' },
-    body: {
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method: 'call',
-      params: { service, method, args }
-    },
-    json: true
+  const { data } = await axios.post(`${ODOO_URL}/jsonrpc`, {
+    jsonrpc: '2.0',
+    id: Date.now(),
+    method: 'call',
+    params: { service, method, args }
   });
-  if (response.error) {
-    throw new Error(response.error.data?.message || response.error.message || JSON.stringify(response.error));
+  if (data.error) {
+    throw new Error(data.error.data?.message || data.error.message || JSON.stringify(data.error));
   }
-  return response.result;
+  return data.result;
 }
 
 // Authenticeren
