@@ -35,23 +35,21 @@
             </div>
         </header>
 
-        <!-- Project selectie uit Odoo -->
+        <!-- Project info (geladen via URL parameters vanuit Odoo) -->
         <div class="project-section">
-            <label for="projectZoek">Project (Odoo)</label>
-            <div class="project-search">
-                <input type="text" id="projectZoek" placeholder="Zoek project in Odoo..." autocomplete="off">
-                <div class="project-dropdown hidden" id="projectDropdown"></div>
-            </div>
-            <div class="project-selected hidden" id="projectSelected">
-                <div class="project-selected-info">
-                    <strong id="projectSelectedNaam"></strong>
-                    <span id="projectSelectedAdres" class="project-adres"></span>
+            <label>Project (Odoo)</label>
+            <div class="project-info hidden" id="projectInfo">
+                <div class="project-info-details">
+                    <strong id="projectInfoNaam"></strong>
+                    <span id="projectInfoAdres" class="project-adres"></span>
                 </div>
-                <button type="button" class="btn btn-remove" onclick="clearProject()" title="Project wissen">&#x2715;</button>
+            </div>
+            <div class="no-project-msg hidden" id="noProjectMsg">
+                <p>Geen project geselecteerd. Open deze pagina via de link in Odoo.</p>
             </div>
             <input type="hidden" id="projectOdooId">
             <div class="project-actions">
-                <button type="button" class="btn btn-load" id="btnLaden" disabled>Laden uit Odoo</button>
+                <button type="button" class="btn btn-load" id="btnLaden" disabled>Herladen uit Odoo</button>
             </div>
         </div>
 

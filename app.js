@@ -2,7 +2,6 @@
 const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-admin';
-const WEBHOOK_SEARCH = WEBHOOK_BASE + '/thermoduct-search';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
 
 // Odoo stage names (must match Odoo project stages)
@@ -140,7 +139,6 @@ let gebouwCounter = 0;
 let rollen = [];
 let rolCounter = 0;
 let selectedProject = null;
-let searchTimeout = null;
 let appInitialized = false;
 
 function initApp() {
@@ -153,20 +151,17 @@ function initApp() {
     const btnOpslaan = document.getElementById('btnOpslaan');
     const btnLaden = document.getElementById('btnLaden');
     const statusMsg = document.getElementById('statusMsg');
-    const projectZoekInput = document.getElementById('projectZoek');
-    const projectDropdown = document.getElementById('projectDropdown');
-    const projectSelectedEl = document.getElementById('projectSelected');
-    const projectSelectedNaam = document.getElementById('projectSelectedNaam');
-    const projectSelectedAdres = document.getElementById('projectSelectedAdres');
+    const projectInfoEl = document.getElementById('projectInfo');
+    const projectInfoNaam = document.getElementById('projectInfoNaam');
+    const projectInfoAdres = document.getElementById('projectInfoAdres');
     const projectOdooIdInput = document.getElementById('projectOdooId');
+    const noProjectMsg = document.getElementById('noProjectMsg');
 
     // Make functions globally accessible
     window.toggleCard = toggleCard;
     window.removeItem = removeItem;
     window.addVerdiep = addVerdiep;
     window.addCollector = addCollector;
-    window.clearProject = clearProject;
-    window.selectProject = selectProject;
     window.removeRol = removeRol;
     window.assignRolToKring = assignRolToKring;
 
@@ -190,70 +185,33 @@ function initApp() {
     btnLaden.addEventListener('click', () => ladenUitOdoo());
     document.getElementById('btnAddRol').addEventListener('click', () => addRol());
 
-    // Project search
-    projectZoekInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        const q = projectZoekInput.value.trim();
-        if (q.length < 2) {
-            projectDropdown.classList.add('hidden');
-            return;
-        }
-        searchTimeout = setTimeout(() => searchProjects(q), 300);
-    });
+    // ===== Project laden via URL parameters =====
+    // Link vanuit Odoo: https://admin.thermoduct.be/?project_id=123&naam=Villa+Gent&adres=Kerkstraat+1
+    function loadProjectFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const projectId = params.get('project_id');
+        const naam = params.get('naam') || '';
+        const adres = params.get('adres') || '';
 
-    projectZoekInput.addEventListener('blur', () => {
-        setTimeout(() => projectDropdown.classList.add('hidden'), 200);
-    });
+        if (projectId) {
+            selectedProject = { id: parseInt(projectId), naam, adres };
+            projectOdooIdInput.value = projectId;
+            projectInfoNaam.textContent = naam;
+            projectInfoAdres.textContent = adres;
+            projectInfoEl.classList.remove('hidden');
+            noProjectMsg.classList.add('hidden');
+            btnLaden.disabled = false;
 
-    // ===== Project search =====
-    async function searchProjects(query) {
-        try {
-            const res = await authFetch(`${WEBHOOK_SEARCH}?q=${encodeURIComponent(query)}`);
-            if (!res.ok) throw new Error('Zoeken mislukt');
-            const projects = await res.json();
-
-            if (!Array.isArray(projects) || projects.length === 0) {
-                projectDropdown.innerHTML = '<div class="dropdown-item dropdown-empty">Geen projecten gevonden</div>';
-            } else {
-                projectDropdown.innerHTML = projects.map(p => `
-                    <div class="dropdown-item" onmousedown="selectProject(${p.id}, '${escapeHtml(p.naam)}', '${escapeHtml(p.adres || '')}')">
-                        <strong>${escapeHtml(p.naam)}</strong>
-                        ${p.adres ? `<span class="dropdown-adres">${escapeHtml(p.adres)}</span>` : ''}
-                    </div>
-                `).join('');
-            }
-            projectDropdown.classList.remove('hidden');
-        } catch (err) {
-            console.error('Search error:', err);
-            projectDropdown.innerHTML = '<div class="dropdown-item dropdown-empty">Fout bij zoeken</div>';
-            projectDropdown.classList.remove('hidden');
+            // Automatisch laden
+            ladenUitOdoo();
+        } else {
+            noProjectMsg.classList.remove('hidden');
+            projectInfoEl.classList.add('hidden');
+            btnLaden.disabled = true;
         }
     }
 
-    function selectProject(id, naam, adres) {
-        selectedProject = { id, naam, adres };
-        projectOdooIdInput.value = id;
-        projectSelectedNaam.textContent = naam;
-        projectSelectedAdres.textContent = adres || '';
-        projectSelectedEl.classList.remove('hidden');
-        projectZoekInput.value = '';
-        projectZoekInput.classList.add('hidden');
-        projectDropdown.classList.add('hidden');
-        btnLaden.disabled = false;
-    }
-
-    function clearProject() {
-        selectedProject = null;
-        projectOdooIdInput.value = '';
-        projectSelectedEl.classList.add('hidden');
-        projectZoekInput.value = '';
-        projectZoekInput.classList.remove('hidden');
-        btnLaden.disabled = true;
-    }
-
-    // Make accessible globally for onclick handlers
-    window.selectProject = selectProject;
-    window.clearProject = clearProject;
+    loadProjectFromUrl();
 
     // ===== Utility =====
     let _id = 0;
@@ -581,7 +539,7 @@ function initApp() {
     }
 
     function validate(data) {
-        if (!data.project_id) return 'Selecteer eerst een project uit Odoo.';
+        if (!data.project_id) return 'Geen project gekoppeld. Open deze pagina via de link in Odoo.';
         if (data.gebouwen.length === 0) return 'Voeg minstens één gebouw toe.';
         for (const gebouw of data.gebouwen) {
             if (!gebouw.naam) return 'Elk gebouw moet een naam hebben.';
