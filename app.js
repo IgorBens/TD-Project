@@ -608,7 +608,7 @@ function initApp() {
         btnLaden.textContent = 'Laden...';
 
         try {
-            const res = await authFetch(`${WEBHOOK_LOAD}?project_id=${selectedProject.id}`);
+            const res = await fetch(`${WEBHOOK_LOAD}?project_id=${selectedProject.id}`);
             if (!res.ok) throw new Error(`Server antwoordde met status ${res.status}`);
 
             const data = await res.json();
