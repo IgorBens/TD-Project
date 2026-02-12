@@ -613,14 +613,16 @@ function initApp() {
 
             const data = await res.json();
 
-            // Update project info uit response
-            if (data.naam) {
-                selectedProject.naam = data.naam;
-                projectInfoNaam.textContent = data.naam;
+            // Update project info uit response (ondersteunt Odoo veldnamen)
+            const projectNaam = data.naam || data.name || '';
+            const projectAdres = data.adres || (Array.isArray(data.partner_id) ? data.partner_id[1] : data.partner_id) || '';
+            if (projectNaam) {
+                selectedProject.naam = projectNaam;
+                projectInfoNaam.textContent = projectNaam;
             }
-            if (data.adres) {
-                selectedProject.adres = data.adres;
-                projectInfoAdres.textContent = data.adres;
+            if (projectAdres) {
+                selectedProject.adres = projectAdres;
+                projectInfoAdres.textContent = projectAdres;
             }
 
             gebouwenContainer.innerHTML = '';
