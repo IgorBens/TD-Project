@@ -7,10 +7,32 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+    <!-- Login scherm -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-card">
+            <h1>Thermoduct</h1>
+            <p class="login-subtitle">Admin Portal</p>
+            <form id="loginForm" onsubmit="return false;">
+                <div class="login-field">
+                    <label for="loginWachtwoord">Wachtwoord</label>
+                    <input type="password" id="loginWachtwoord" placeholder="Voer wachtwoord in..." autofocus>
+                </div>
+                <button type="submit" class="btn btn-login" id="btnLogin">Inloggen</button>
+                <div id="loginError" class="login-error hidden"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hoofdapplicatie (verborgen tot ingelogd) -->
+    <div class="container hidden" id="appContainer">
         <header>
-            <h1>Thermoduct Admin Portal</h1>
-            <p class="subtitle">Projectbeheer &amp; Installatie-invoer</p>
+            <div class="header-bar">
+                <div>
+                    <h1>Thermoduct Admin Portal</h1>
+                    <p class="subtitle">Projectbeheer &amp; Installatie-invoer</p>
+                </div>
+                <button type="button" class="btn btn-logout" id="btnLogout">Uitloggen</button>
+            </div>
         </header>
 
         <!-- Project selectie uit Odoo -->
