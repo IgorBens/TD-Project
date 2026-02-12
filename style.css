@@ -229,6 +229,18 @@ select:focus {
     max-width: 400px;
 }
 
+/* Project load row */
+.project-load-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    max-width: 400px;
+}
+
+.project-load-row input {
+    flex: 1;
+}
+
 /* Project info */
 .project-info {
     display: flex;
@@ -237,7 +249,7 @@ select:focus {
     border: 1px solid #a5d6a7;
     border-radius: 6px;
     padding: 10px 12px;
-    margin-top: 8px;
+    margin-top: 10px;
     max-width: 400px;
 }
 
@@ -249,21 +261,6 @@ select:focus {
     display: block;
     font-size: 0.9rem;
     color: #2e7d32;
-}
-
-.no-project-msg {
-    margin-top: 8px;
-    padding: 12px;
-    background: #fff3cd;
-    border: 1px solid #ffc107;
-    border-radius: 6px;
-    max-width: 400px;
-    font-size: 0.85rem;
-    color: #856404;
-}
-
-.no-project-msg.hidden {
-    display: none;
 }
 
 .project-adres {

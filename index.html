@@ -35,21 +35,18 @@
             </div>
         </header>
 
-        <!-- Project info (geladen via URL parameters vanuit Odoo) -->
+        <!-- Project laden -->
         <div class="project-section">
-            <label>Project (Odoo)</label>
+            <label for="projectIdInput">Project ID (Odoo)</label>
+            <div class="project-load-row">
+                <input type="number" id="projectIdInput" placeholder="Voer project ID in..." min="1">
+                <button type="button" class="btn btn-load" id="btnLaden">Laden</button>
+            </div>
             <div class="project-info hidden" id="projectInfo">
                 <div class="project-info-details">
                     <strong id="projectInfoNaam"></strong>
                     <span id="projectInfoAdres" class="project-adres"></span>
                 </div>
-            </div>
-            <div class="no-project-msg hidden" id="noProjectMsg">
-                <p>Geen project geselecteerd. Open deze pagina via de link in Odoo.</p>
-            </div>
-            <input type="hidden" id="projectOdooId">
-            <div class="project-actions">
-                <button type="button" class="btn btn-load" id="btnLaden" disabled>Herladen uit Odoo</button>
             </div>
         </div>
 

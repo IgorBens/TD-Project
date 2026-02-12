@@ -151,11 +151,10 @@ function initApp() {
     const btnOpslaan = document.getElementById('btnOpslaan');
     const btnLaden = document.getElementById('btnLaden');
     const statusMsg = document.getElementById('statusMsg');
+    const projectIdInput = document.getElementById('projectIdInput');
     const projectInfoEl = document.getElementById('projectInfo');
     const projectInfoNaam = document.getElementById('projectInfoNaam');
     const projectInfoAdres = document.getElementById('projectInfoAdres');
-    const projectOdooIdInput = document.getElementById('projectOdooId');
-    const noProjectMsg = document.getElementById('noProjectMsg');
 
     // Make functions globally accessible
     window.toggleCard = toggleCard;
@@ -184,31 +183,6 @@ function initApp() {
     btnOpslaan.addEventListener('click', () => opslaan());
     btnLaden.addEventListener('click', () => ladenUitOdoo());
     document.getElementById('btnAddRol').addEventListener('click', () => addRol());
-
-    // ===== Project laden via URL =====
-    // Link vanuit Odoo: http://46.225.76.46/admin/?122
-    function loadProjectFromUrl() {
-        const projectId = window.location.search.replace('?', '').trim();
-
-        if (projectId && !isNaN(projectId)) {
-            selectedProject = { id: parseInt(projectId), naam: '', adres: '' };
-            projectOdooIdInput.value = projectId;
-            projectInfoNaam.textContent = 'Project laden...';
-            projectInfoAdres.textContent = '';
-            projectInfoEl.classList.remove('hidden');
-            noProjectMsg.classList.add('hidden');
-            btnLaden.disabled = false;
-
-            // Automatisch laden
-            ladenUitOdoo();
-        } else {
-            noProjectMsg.classList.remove('hidden');
-            projectInfoEl.classList.add('hidden');
-            btnLaden.disabled = true;
-        }
-    }
-
-    loadProjectFromUrl();
 
     // ===== Utility =====
     let _id = 0;
@@ -536,7 +510,7 @@ function initApp() {
     }
 
     function validate(data) {
-        if (!data.project_id) return 'Geen project gekoppeld. Open deze pagina via de link in Odoo.';
+        if (!data.project_id) return 'Voer eerst een project ID in en klik op Laden.';
         if (data.gebouwen.length === 0) return 'Voeg minstens één gebouw toe.';
         for (const gebouw of data.gebouwen) {
             if (!gebouw.naam) return 'Elk gebouw moet een naam hebben.';
@@ -623,8 +597,13 @@ function initApp() {
 
     // ===== Load from Odoo =====
     async function ladenUitOdoo() {
-        if (!selectedProject?.id) return;
+        const projectId = parseInt(projectIdInput.value);
+        if (!projectId) {
+            showStatus('Voer een project ID in.', 'error');
+            return;
+        }
 
+        selectedProject = { id: projectId, naam: '', adres: '' };
         btnLaden.disabled = true;
         btnLaden.textContent = 'Laden...';
 
