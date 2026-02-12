@@ -13,9 +13,24 @@
             <p class="subtitle">Projectbeheer &amp; Installatie-invoer</p>
         </header>
 
+        <!-- Project selectie uit Odoo -->
         <div class="project-section">
-            <label for="projectNaam">Projectnaam</label>
-            <input type="text" id="projectNaam" placeholder="bijv. Residentie Zonnepark">
+            <label for="projectZoek">Project (Odoo)</label>
+            <div class="project-search">
+                <input type="text" id="projectZoek" placeholder="Zoek project in Odoo..." autocomplete="off">
+                <div class="project-dropdown hidden" id="projectDropdown"></div>
+            </div>
+            <div class="project-selected hidden" id="projectSelected">
+                <div class="project-selected-info">
+                    <strong id="projectSelectedNaam"></strong>
+                    <span id="projectSelectedAdres" class="project-adres"></span>
+                </div>
+                <button type="button" class="btn btn-remove" onclick="clearProject()" title="Project wissen">&#x2715;</button>
+            </div>
+            <input type="hidden" id="projectOdooId">
+            <div class="project-actions">
+                <button type="button" class="btn btn-load" id="btnLaden" disabled>Laden uit Odoo</button>
+            </div>
         </div>
 
         <!-- Tabs -->
@@ -33,7 +48,7 @@
             </div>
 
             <div class="submit-bar">
-                <button type="button" class="btn btn-save" id="btnOpslaan">Opslaan &amp; Versturen</button>
+                <button type="button" class="btn btn-save" id="btnOpslaan">Opslaan naar Odoo</button>
             </div>
 
             <div id="statusMsg" class="status-msg hidden"></div>
