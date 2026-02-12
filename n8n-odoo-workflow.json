@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ============================================\n// Configuratie — pas deze waarden aan!\n// ============================================\nconst ODOO_URL = 'https://jouw-odoo-url.com';\nconst ODOO_DB = 'jouw-database';\nconst ODOO_USER = 'admin';\nconst ODOO_PASSWORD = 'jouw-api-key';\n\nconst input = $input.first().json;\n\n// Sla config + input op voor gebruik in volgende nodes\nreturn [{\n  json: {\n    config: { url: ODOO_URL, db: ODOO_DB, user: ODOO_USER, password: ODOO_PASSWORD },\n    input: input,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 1,\n      method: 'call',\n      params: {\n        service: 'common',\n        method: 'authenticate',\n        args: [ODOO_DB, ODOO_USER, ODOO_PASSWORD, {}]\n      }\n    }\n  }\n}];"
+        "jsCode": "// ============================================\n// Configuratie — pas deze waarden aan!\n// ============================================\nconst ODOO_URL = 'https://jouw-odoo-url.com';\nconst ODOO_DB = 'jouw-database';\nconst ODOO_USER = 'admin';\nconst ODOO_PASSWORD = 'jouw-api-key';\n\nconst input = $input.first().json;\n\nreturn [{\n  json: {\n    config: { url: ODOO_URL, db: ODOO_DB, user: ODOO_USER, password: ODOO_PASSWORD },\n    input: input,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 1,\n      method: 'call',\n      params: {\n        service: 'common',\n        method: 'authenticate',\n        args: [ODOO_DB, ODOO_USER, ODOO_PASSWORD, {}]\n      }\n    }\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000002",
       "name": "Setup",
@@ -48,13 +48,44 @@
     },
     {
       "parameters": {
-        "jsCode": "// Haal uid op uit auth response\nconst authResponse = $input.first().json;\nconst uid = authResponse.result;\nif (!uid) throw new Error('Odoo authenticatie mislukt!');\n\n// Haal originele input op via $('Setup') referentie\nconst setup = $('Setup').first().json;\nconst config = setup.config;\n// Webhook data zit in input.body (headers/params/query/body structuur)\nconst webhookData = setup.input.body || setup.input;\nconst projectId = webhookData.project_id;\nconst gebouwen = webhookData.gebouwen || [];\n\n// Maak platte lijst van alle taken in volgorde:\n// 1. Eerst alle gebouwen\n// 2. Dan alle verdiepen (met referentie naar parent gebouw)\n// 3. Dan alle collectoren\n// 4. Dan alle kringen\nconst tasks = [];\n\nfor (let gi = 0; gi < gebouwen.length; gi++) {\n  const g = gebouwen[gi];\n  tasks.push({\n    ref: `g_${gi}`,\n    parentRef: null,\n    level: 'gebouw',\n    stageName: 'Blokken',\n    odooId: g.odoo_id ? parseInt(g.odoo_id) : null,\n    values: { name: g.naam, project_id: projectId, parent_id: false },\n    meta: { gi, naam: g.naam }\n  });\n\n  for (let vi = 0; vi < (g.verdiepen || []).length; vi++) {\n    const v = g.verdiepen[vi];\n    tasks.push({\n      ref: `v_${gi}_${vi}`,\n      parentRef: `g_${gi}`,\n      level: 'verdiep',\n      stageName: 'Verdiepen',\n      odooId: v.odoo_id ? parseInt(v.odoo_id) : null,\n      values: { name: `Verdieping ${v.nummer}`, project_id: projectId },\n      meta: { gi, vi, nummer: v.nummer }\n    });\n\n    for (let ci = 0; ci < (v.collectoren || []).length; ci++) {\n      const c = v.collectoren[ci];\n      tasks.push({\n        ref: `c_${gi}_${vi}_${ci}`,\n        parentRef: `v_${gi}_${vi}`,\n        level: 'collector',\n        stageName: 'Collectoren',\n        odooId: c.odoo_id ? parseInt(c.odoo_id) : null,\n        values: { name: c.naam || `Collector ${c.nummer}`, project_id: projectId },\n        meta: { gi, vi, ci, nummer: c.nummer }\n      });\n\n      for (let ki = 0; ki < (c.kringen || []).length; ki++) {\n        const k = c.kringen[ki];\n        tasks.push({\n          ref: `k_${gi}_${vi}_${ci}_${ki}`,\n          parentRef: `c_${gi}_${vi}_${ci}`,\n          level: 'kring',\n          stageName: 'Kringen',\n          odooId: k.odoo_id ? parseInt(k.odoo_id) : null,\n          values: { name: `Kring ${k.nummer}`, project_id: projectId },\n          meta: { gi, vi, ci, ki, nummer: k.nummer }\n        });\n      }\n    }\n  }\n}\n\n// Geef elke taak mee als apart item + gedeelde context\nreturn tasks.map(task => ({\n  json: {\n    config,\n    uid,\n    projectId,\n    task,\n    idMap: {},      // wordt gevuld tijdens de loop\n    stageMap: {}    // wordt gevuld tijdens de loop\n  }\n}));"
+        "jsCode": "// Haal uid op uit auth response en bouw stage lookup request\nconst authResponse = $input.first().json;\nconst uid = authResponse.result;\nif (!uid) throw new Error('Odoo authenticatie mislukt!');\n\nconst setup = $('Setup').first().json;\nconst config = setup.config;\n\n// Zoek alle 4 stages op in één keer via search_read\nreturn [{\n  json: {\n    config,\n    uid,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 2,\n      method: 'call',\n      params: {\n        service: 'object',\n        method: 'execute_kw',\n        args: [\n          config.db, uid, config.password,\n          'project.task.type', 'search_read',\n          [[['name', 'in', ['Blokken', 'Verdiepen', 'Collectoren', 'Kringen']]]],\n          { fields: ['name'] }\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000011",
+      "name": "Prep Stage Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.url }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000012",
+      "name": "Lookup Stages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verwerk stage lookup resultaten en flatten alle taken\nconst stageResponse = $input.first().json;\nconst stageRecords = stageResponse.result || [];\n\n// Bouw stageMap: { 'Blokken': 5, 'Verdiepen': 6, ... }\nconst stageMap = {};\nfor (const rec of stageRecords) {\n  stageMap[rec.name] = rec.id;\n}\n\n// Haal config + uid op\nconst prepNode = $('Prep Stage Lookup').first().json;\nconst config = prepNode.config;\nconst uid = prepNode.uid;\n\n// Haal originele webhook data op\nconst setup = $('Setup').first().json;\nconst webhookData = setup.input.body || setup.input;\nconst projectId = webhookData.project_id;\nconst gebouwen = webhookData.gebouwen || [];\n\n// Sla stageMap op in static data voor gebruik in de loop\nconst staticData = $getWorkflowStaticData('global');\nstaticData.stageMap = stageMap;\nstaticData.idMap = {};\nstaticData.results = [];\n\n// Flatten alle taken in volgorde: gebouwen → verdiepen → collectoren → kringen\nconst tasks = [];\n\nfor (let gi = 0; gi < gebouwen.length; gi++) {\n  const g = gebouwen[gi];\n  tasks.push({\n    ref: `g_${gi}`,\n    parentRef: null,\n    level: 'gebouw',\n    odooId: g.odoo_id ? parseInt(g.odoo_id) : null,\n    values: {\n      name: g.naam,\n      project_id: projectId,\n      stage_id: stageMap['Blokken'] || false,\n      parent_id: false\n    },\n    meta: { gi, naam: g.naam }\n  });\n\n  for (let vi = 0; vi < (g.verdiepen || []).length; vi++) {\n    const v = g.verdiepen[vi];\n    tasks.push({\n      ref: `v_${gi}_${vi}`,\n      parentRef: `g_${gi}`,\n      level: 'verdiep',\n      odooId: v.odoo_id ? parseInt(v.odoo_id) : null,\n      values: {\n        name: `Verdieping ${v.nummer}`,\n        project_id: projectId,\n        stage_id: stageMap['Verdiepen'] || false\n      },\n      meta: { gi, vi, nummer: v.nummer }\n    });\n\n    for (let ci = 0; ci < (v.collectoren || []).length; ci++) {\n      const c = v.collectoren[ci];\n      tasks.push({\n        ref: `c_${gi}_${vi}_${ci}`,\n        parentRef: `v_${gi}_${vi}`,\n        level: 'collector',\n        odooId: c.odoo_id ? parseInt(c.odoo_id) : null,\n        values: {\n          name: c.naam || `Collector ${c.nummer}`,\n          project_id: projectId,\n          stage_id: stageMap['Collectoren'] || false\n        },\n        meta: { gi, vi, ci, nummer: c.nummer }\n      });\n\n      for (let ki = 0; ki < (c.kringen || []).length; ki++) {\n        const k = c.kringen[ki];\n        tasks.push({\n          ref: `k_${gi}_${vi}_${ci}_${ki}`,\n          parentRef: `c_${gi}_${vi}_${ci}`,\n          level: 'kring',\n          odooId: k.odoo_id ? parseInt(k.odoo_id) : null,\n          values: {\n            name: `Kring ${k.nummer}`,\n            project_id: projectId,\n            stage_id: stageMap['Kringen'] || false\n          },\n          meta: { gi, vi, ci, ki, nummer: k.nummer }\n        });\n      }\n    }\n  }\n}\n\nreturn tasks.map(task => ({\n  json: { config, uid, task }\n}));"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000004",
       "name": "Flatten Tasks",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 300]
+      "position": [1100, 300]
     },
     {
       "parameters": {
@@ -65,17 +96,17 @@
       "name": "Loop Tasks",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [880, 300]
+      "position": [1320, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Bouw het JSON-RPC request voor de huidige taak\nconst item = $input.first().json;\nconst { config, uid, task } = item;\n\n// Haal idMap en stageMap op uit workflow static data\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.idMap) staticData.idMap = {};\nif (!staticData.stageMap) staticData.stageMap = {};\n\nconst idMap = staticData.idMap;\nconst stageMap = staticData.stageMap;\n\n// Stap 1: Kijk of we al een stage_id hebben, anders eerst opzoeken\nif (task.stageName && !stageMap[task.stageName]) {\n  // Geef een stage-lookup request terug\n  return [{\n    json: {\n      step: 'stage_lookup',\n      config,\n      uid,\n      task,\n      rpc: {\n        jsonrpc: '2.0',\n        id: Date.now(),\n        method: 'call',\n        params: {\n          service: 'object',\n          method: 'execute_kw',\n          args: [\n            config.db, uid, config.password,\n            'project.task.type', 'search',\n            [[['name', '=', task.stageName]]]\n          ]\n        }\n      }\n    }\n  }];\n}\n\n// Stap 2: Bouw het create/write request\nconst values = { ...task.values };\n\n// Voeg stage_id toe\nif (task.stageName && stageMap[task.stageName]) {\n  values.stage_id = stageMap[task.stageName];\n}\n\n// Voeg parent_id toe (opzoeken uit idMap)\nif (task.parentRef && idMap[task.parentRef]) {\n  values.parent_id = idMap[task.parentRef];\n}\n\nlet rpc;\nif (task.odooId) {\n  // Update bestaand record\n  rpc = {\n    jsonrpc: '2.0',\n    id: Date.now(),\n    method: 'call',\n    params: {\n      service: 'object',\n      method: 'execute_kw',\n      args: [config.db, uid, config.password, 'project.task', 'write', [[task.odooId], values]]\n    }\n  };\n} else {\n  // Nieuw record\n  rpc = {\n    jsonrpc: '2.0',\n    id: Date.now(),\n    method: 'call',\n    params: {\n      service: 'object',\n      method: 'execute_kw',\n      args: [config.db, uid, config.password, 'project.task', 'create', [values]]\n    }\n  };\n}\n\nreturn [{\n  json: {\n    step: 'save',\n    config,\n    uid,\n    task,\n    rpc\n  }\n}];"
+        "jsCode": "// Bouw het JSON-RPC create/write request\nconst item = $input.first().json;\nconst { config, uid, task } = item;\n\n// Haal parent_id op uit static data (eerder aangemaakte records)\nconst staticData = $getWorkflowStaticData('global');\nconst idMap = staticData.idMap || {};\n\nconst values = { ...task.values };\n\n// Voeg parent_id toe als er een parent is\nif (task.parentRef && idMap[task.parentRef]) {\n  values.parent_id = idMap[task.parentRef];\n}\n\nlet rpc;\nif (task.odooId) {\n  // Update bestaand record\n  rpc = {\n    jsonrpc: '2.0',\n    id: Date.now(),\n    method: 'call',\n    params: {\n      service: 'object',\n      method: 'execute_kw',\n      args: [config.db, uid, config.password, 'project.task', 'write', [[task.odooId], values]]\n    }\n  };\n} else {\n  // Nieuw record aanmaken\n  rpc = {\n    jsonrpc: '2.0',\n    id: Date.now(),\n    method: 'call',\n    params: {\n      service: 'object',\n      method: 'execute_kw',\n      args: [config.db, uid, config.password, 'project.task', 'create', [values]]\n    }\n  };\n}\n\nreturn [{\n  json: { config, uid, task, rpc }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000006",
       "name": "Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 300]
+      "position": [1540, 300]
     },
     {
       "parameters": {
@@ -96,27 +127,27 @@
       "name": "Odoo Request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1320, 300]
+      "position": [1760, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Verwerk het Odoo response en sla IDs op\nconst response = $input.first().json;\nconst buildRequest = $('Build Request').first().json;\nconst { step, task } = buildRequest;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.idMap) staticData.idMap = {};\nif (!staticData.stageMap) staticData.stageMap = {};\nif (!staticData.results) staticData.results = [];\n\nif (response.error) {\n  throw new Error(\n    `Odoo fout bij ${task.ref}: ` +\n    (response.error.data?.message || response.error.message || JSON.stringify(response.error))\n  );\n}\n\nif (step === 'stage_lookup') {\n  // Sla stage ID op\n  const stageIds = response.result;\n  if (stageIds && stageIds.length > 0) {\n    staticData.stageMap[task.stageName] = stageIds[0];\n  }\n  // We moeten deze taak OPNIEUW verwerken (nu met stage_id)\n  // Stuur het item terug met een flag\n  return [{ json: { needsReprocess: true, task } }];\n}\n\nif (step === 'save') {\n  const odooId = task.odooId || response.result;\n  // Sla het ID op zodat kinderen het kunnen gebruiken\n  staticData.idMap[task.ref] = odooId;\n  // Sla resultaat op voor de eindresponse\n  staticData.results.push({\n    ref: task.ref,\n    parentRef: task.parentRef,\n    level: task.level,\n    odooId: odooId,\n    meta: task.meta\n  });\n}\n\nreturn [{ json: { done: true, ref: task.ref } }];"
+        "jsCode": "// Verwerk Odoo response, sla ID op voor kinderen\nconst response = $input.first().json;\nconst buildReq = $('Build Request').first().json;\nconst { task } = buildReq;\n\nif (response.error) {\n  throw new Error(\n    `Odoo fout bij ${task.ref}: ` +\n    (response.error.data?.message || response.error.message || JSON.stringify(response.error))\n  );\n}\n\nconst staticData = $getWorkflowStaticData('global');\n\n// Bepaal het odoo_id (bij create is het result het nieuwe ID, bij write is het true)\nconst odooId = task.odooId || response.result;\n\n// Sla ID op zodat kinderen het als parent_id kunnen gebruiken\nstaticData.idMap[task.ref] = odooId;\n\n// Sla resultaat op voor de eindresponse\nstaticData.results.push({\n  ref: task.ref,\n  parentRef: task.parentRef,\n  level: task.level,\n  odooId: odooId,\n  meta: task.meta\n});\n\nreturn [{ json: { done: true, ref: task.ref, odooId } }];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000008",
       "name": "Store Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1540, 300]
+      "position": [1980, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Bouw het geneste resultaat op uit de opgeslagen resultaten\nconst staticData = $getWorkflowStaticData('global');\nconst results = staticData.results || [];\nconst setup = $('Setup').first().json;\nconst webhookData = setup.input.body || setup.input;\nconst projectId = webhookData.project_id;\n\n// Groepeer resultaten per level\nconst gebouwen = results.filter(r => r.level === 'gebouw');\nconst verdiepen = results.filter(r => r.level === 'verdiep');\nconst collectoren = results.filter(r => r.level === 'collector');\nconst kringen = results.filter(r => r.level === 'kring');\n\n// Bouw geneste structuur op\nconst output = gebouwen.map(g => ({\n  odoo_id: g.odooId,\n  naam: g.meta.naam,\n  verdiepen: verdiepen\n    .filter(v => v.meta.gi === g.meta.gi)\n    .map(v => ({\n      odoo_id: v.odooId,\n      nummer: v.meta.nummer,\n      collectoren: collectoren\n        .filter(c => c.meta.gi === g.meta.gi && c.meta.vi === v.meta.vi)\n        .map(c => ({\n          odoo_id: c.odooId,\n          nummer: c.meta.nummer,\n          kringen: kringen\n            .filter(k => k.meta.gi === g.meta.gi && k.meta.vi === v.meta.vi && k.meta.ci === c.meta.ci)\n            .map(k => ({\n              odoo_id: k.odooId,\n              nummer: k.meta.nummer\n            }))\n        }))\n    }))\n}));\n\n// Ruim static data op\ndelete staticData.idMap;\ndelete staticData.stageMap;\ndelete staticData.results;\n\nreturn [{\n  json: {\n    success: true,\n    project_id: projectId,\n    gebouwen: output\n  }\n}];"
+        "jsCode": "// Bouw het geneste resultaat op\nconst staticData = $getWorkflowStaticData('global');\nconst results = staticData.results || [];\n\nconst setup = $('Setup').first().json;\nconst webhookData = setup.input.body || setup.input;\nconst projectId = webhookData.project_id;\n\nconst gebouwen = results.filter(r => r.level === 'gebouw');\nconst verdiepen = results.filter(r => r.level === 'verdiep');\nconst collectoren = results.filter(r => r.level === 'collector');\nconst kringen = results.filter(r => r.level === 'kring');\n\nconst output = gebouwen.map(g => ({\n  odoo_id: g.odooId,\n  naam: g.meta.naam,\n  verdiepen: verdiepen\n    .filter(v => v.meta.gi === g.meta.gi)\n    .map(v => ({\n      odoo_id: v.odooId,\n      nummer: v.meta.nummer,\n      collectoren: collectoren\n        .filter(c => c.meta.gi === g.meta.gi && c.meta.vi === v.meta.vi)\n        .map(c => ({\n          odoo_id: c.odooId,\n          nummer: c.meta.nummer,\n          kringen: kringen\n            .filter(k => k.meta.gi === g.meta.gi && k.meta.vi === v.meta.vi && k.meta.ci === c.meta.ci)\n            .map(k => ({\n              odoo_id: k.odooId,\n              nummer: k.meta.nummer\n            }))\n        }))\n    }))\n}));\n\n// Ruim static data op\ndelete staticData.idMap;\ndelete staticData.stageMap;\ndelete staticData.results;\n\nreturn [{\n  json: {\n    success: true,\n    project_id: projectId,\n    gebouwen: output\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000009",
       "name": "Build Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 540]
+      "position": [1540, 540]
     },
     {
       "parameters": {
@@ -128,7 +159,7 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1320, 540]
+      "position": [1760, 540]
     }
   ],
   "connections": {
@@ -143,6 +174,16 @@
       ]
     },
     "Odoo Auth": {
+      "main": [
+        [{ "node": "Prep Stage Lookup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Stage Lookup": {
+      "main": [
+        [{ "node": "Lookup Stages", "type": "main", "index": 0 }]
+      ]
+    },
+    "Lookup Stages": {
       "main": [
         [{ "node": "Flatten Tasks", "type": "main", "index": 0 }]
       ]
