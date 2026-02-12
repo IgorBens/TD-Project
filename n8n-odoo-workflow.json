@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "odoo-save",
+        "path": "thermoduct-admin",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -13,7 +13,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [0, 300],
-      "webhookId": "odoo-save"
+      "webhookId": "thermoduct-admin"
     },
     {
       "parameters": {
