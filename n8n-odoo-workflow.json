@@ -48,13 +48,105 @@
     },
     {
       "parameters": {
-        "jsCode": "// Haal uid op uit auth response en bouw stage lookup request\nconst authResponse = $input.first().json;\nconst uid = authResponse.result;\nif (!uid) throw new Error('Odoo authenticatie mislukt!');\n\nconst setup = $('Setup').first().json;\nconst config = setup.config;\n\n// Zoek alle 4 stages op in één keer via search_read\nreturn [{\n  json: {\n    config,\n    uid,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 2,\n      method: 'call',\n      params: {\n        service: 'object',\n        method: 'execute_kw',\n        args: [\n          config.db, uid, config.password,\n          'project.task.type', 'search_read',\n          [[['name', 'in', ['Blokken', 'Verdiepen', 'Collectoren', 'Kringen']]]],\n          { fields: ['name'] }\n        ]\n      }\n    }\n  }\n}];"
+        "jsCode": "// Route op basis van action: 'save' of 'delete'\nconst authResponse = $input.first().json;\nconst uid = authResponse.result;\nif (!uid) throw new Error('Odoo authenticatie mislukt!');\n\nconst setup = $('Setup').first().json;\nconst config = setup.config;\nconst webhookData = setup.input.body || setup.input;\nconst action = webhookData.action || 'save';\n\nreturn [{\n  json: { config, uid, action, webhookData }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000013",
+      "name": "Parse Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-delete",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "delete",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000014",
+      "name": "Is Delete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bouw het unlink (delete) request voor Odoo\nconst item = $input.first().json;\nconst { config, uid, webhookData } = item;\nconst odooIds = webhookData.odoo_ids || [];\n\nif (odooIds.length === 0) {\n  throw new Error('Geen odoo_ids opgegeven om te verwijderen.');\n}\n\n// Odoo unlink verwijdert meerdere records in één keer\nreturn [{\n  json: {\n    config,\n    uid,\n    odooIds,\n    rpc: {\n      jsonrpc: '2.0',\n      id: Date.now(),\n      method: 'call',\n      params: {\n        service: 'object',\n        method: 'execute_kw',\n        args: [\n          config.db, uid, config.password,\n          'project.task', 'unlink',\n          [odooIds]\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000015",
+      "name": "Prep Delete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.url }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000016",
+      "name": "Odoo Delete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verwerk delete response\nconst response = $input.first().json;\nconst prepDelete = $('Prep Delete').first().json;\n\nif (response.error) {\n  throw new Error(\n    'Odoo fout bij verwijderen: ' +\n    (response.error.data?.message || response.error.message || JSON.stringify(response.error))\n  );\n}\n\nreturn [{\n  json: {\n    success: true,\n    action: 'delete',\n    deleted_ids: prepDelete.odooIds\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000017",
+      "name": "Delete Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 140]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000018",
+      "name": "Respond Delete",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1760, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Save pad: bouw stage lookup request\nconst item = $input.first().json;\nconst { config, uid } = item;\n\nreturn [{\n  json: {\n    config,\n    uid,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 2,\n      method: 'call',\n      params: {\n        service: 'object',\n        method: 'execute_kw',\n        args: [\n          config.db, uid, config.password,\n          'project.task.type', 'search_read',\n          [[['name', 'in', ['Blokken', 'Verdiepen', 'Collectoren', 'Kringen']]]],\n          { fields: ['name'] }\n        ]\n      }\n    }\n  }\n}];"
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000011",
       "name": "Prep Stage Lookup",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 300]
+      "position": [1100, 460]
     },
     {
       "parameters": {
@@ -75,7 +167,7 @@
       "name": "Lookup Stages",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 300]
+      "position": [1320, 460]
     },
     {
       "parameters": {
@@ -85,7 +177,7 @@
       "name": "Flatten Tasks",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 300]
+      "position": [1540, 460]
     },
     {
       "parameters": {
@@ -96,7 +188,7 @@
       "name": "Loop Tasks",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [1320, 300]
+      "position": [1760, 460]
     },
     {
       "parameters": {
@@ -106,7 +198,7 @@
       "name": "Build Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1540, 300]
+      "position": [1980, 460]
     },
     {
       "parameters": {
@@ -127,7 +219,7 @@
       "name": "Odoo Request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1760, 300]
+      "position": [2200, 460]
     },
     {
       "parameters": {
@@ -137,7 +229,7 @@
       "name": "Store Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1980, 300]
+      "position": [2420, 460]
     },
     {
       "parameters": {
@@ -147,7 +239,7 @@
       "name": "Build Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1540, 540]
+      "position": [1980, 660]
     },
     {
       "parameters": {
@@ -159,7 +251,7 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1760, 540]
+      "position": [2200, 660]
     }
   ],
   "connections": {
@@ -175,7 +267,33 @@
     },
     "Odoo Auth": {
       "main": [
+        [{ "node": "Parse Auth", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Auth": {
+      "main": [
+        [{ "node": "Is Delete?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Delete?": {
+      "main": [
+        [{ "node": "Prep Delete", "type": "main", "index": 0 }],
         [{ "node": "Prep Stage Lookup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Delete": {
+      "main": [
+        [{ "node": "Odoo Delete", "type": "main", "index": 0 }]
+      ]
+    },
+    "Odoo Delete": {
+      "main": [
+        [{ "node": "Delete Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Delete Response": {
+      "main": [
+        [{ "node": "Respond Delete", "type": "main", "index": 0 }]
       ]
     },
     "Prep Stage Lookup": {

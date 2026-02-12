@@ -197,7 +197,47 @@ function initApp() {
 
     function removeItem(btn) {
         const card = btn.closest('.card');
+
+        // Verzamel alle odoo_ids van deze kaart + alle kinderen
+        const odooIds = [];
+        const allCards = [card, ...card.querySelectorAll('.card[data-odoo-id]')];
+        allCards.forEach(c => {
+            if (c.dataset.odooId) odooIds.push(parseInt(c.dataset.odooId));
+        });
+
+        if (odooIds.length > 0) {
+            const level = card.dataset.level || 'item';
+            const count = odooIds.length;
+            const msg = count > 1
+                ? `Dit ${level} en ${count - 1} onderliggende items verwijderen uit Odoo?`
+                : `Dit ${level} verwijderen uit Odoo?`;
+
+            if (!confirm(msg)) return;
+
+            deleteFromOdoo(odooIds);
+        }
+
         card.remove();
+    }
+
+    async function deleteFromOdoo(odooIds) {
+        if (!selectedProject?.id || odooIds.length === 0) return;
+
+        try {
+            await authFetch(WEBHOOK_SAVE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete',
+                    project_id: selectedProject.id,
+                    odoo_ids: odooIds
+                })
+            });
+            showStatus(`${odooIds.length} item(s) verwijderd uit Odoo.`, 'success');
+        } catch (err) {
+            showStatus(`Fout bij verwijderen: ${err.message}`, 'error');
+            console.error('Delete error:', err);
+        }
     }
 
     function createCard(level, badgeText, titleText, odooId) {
