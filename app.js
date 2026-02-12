@@ -2,17 +2,17 @@
 const WEBHOOK_URL = 'http://46.225.76.46:5678/webhook/thermoduct-admin';
 
 // ===== State =====
-let blokCounter = 0;
+let gebouwCounter = 0;
 
 // ===== DOM references =====
-const blokkenContainer = document.getElementById('blokkenContainer');
-const btnAddBlok = document.getElementById('btnAddBlok');
+const gebouwenContainer = document.getElementById('blokkenContainer');
+const btnAddGebouw = document.getElementById('btnAddBlok');
 const btnOpslaan = document.getElementById('btnOpslaan');
 const statusMsg = document.getElementById('statusMsg');
 const projectNaamInput = document.getElementById('projectNaam');
 
 // ===== Event listeners =====
-btnAddBlok.addEventListener('click', () => addBlok());
+btnAddGebouw.addEventListener('click', () => addGebouw());
 btnOpslaan.addEventListener('click', () => opslaan());
 
 // ===== Utility: unique IDs =====
@@ -67,21 +67,25 @@ function bindTitleUpdate(input, card, prefix) {
     });
 }
 
-// ===== Add Blok =====
-function addBlok() {
-    blokCounter++;
-    const { card, bodyId } = createCard('blok', 'Blok', `Blok ${blokCounter}`);
+// ===== Format verdiep nummer as +00, +01, etc. =====
+function formatVerdiep(num) {
+    const n = parseInt(num);
+    if (isNaN(n)) return '+00';
+    const sign = n < 0 ? '-' : '+';
+    return sign + String(Math.abs(n)).padStart(2, '0');
+}
+
+// ===== Add Gebouw (was Blok) =====
+function addGebouw() {
+    gebouwCounter++;
+    const { card, bodyId } = createCard('blok', 'Gebouw', `Gebouw ${gebouwCounter}`);
 
     const body = card.querySelector(`#${bodyId}`);
     body.innerHTML = `
-        <div class="field-row cols-2">
+        <div class="field-row cols-1">
             <div>
                 <label>Naam</label>
-                <input type="text" class="blok-naam" placeholder="bijv. Blok A">
-            </div>
-            <div>
-                <label>Adres</label>
-                <input type="text" class="blok-adres" placeholder="bijv. Kerkstraat 1">
+                <input type="text" class="blok-naam" placeholder="bijv. Blok A, Woning 1, Villa ...">
             </div>
         </div>
         <div class="children-container" data-children="verdiepen"></div>
@@ -89,24 +93,25 @@ function addBlok() {
     `;
 
     const naamInput = body.querySelector('.blok-naam');
-    bindTitleUpdate(naamInput, card, 'Blok');
+    bindTitleUpdate(naamInput, card, 'Gebouw');
 
-    blokkenContainer.appendChild(card);
+    gebouwenContainer.appendChild(card);
 }
 
 // ===== Add Verdiep =====
 function addVerdiep(btn) {
     const container = btn.previousElementSibling;
-    const count = container.children.length + 1;
+    const count = container.children.length;
 
-    const { card, bodyId } = createCard('verdiep', 'Verdiep', `Verdieping ${count}`);
+    const verdiepLabel = formatVerdiep(count);
+    const { card, bodyId } = createCard('verdiep', 'Verdiep', `Verdieping ${verdiepLabel}`);
     const body = card.querySelector(`#${bodyId}`);
 
     body.innerHTML = `
         <div class="field-row cols-2">
             <div>
-                <label>Nummer</label>
-                <input type="number" class="verdiep-nummer" placeholder="bijv. 1" min="0" value="${count}">
+                <label>Verdieping</label>
+                <input type="number" class="verdiep-nummer" placeholder="bijv. 0" min="-5" value="${count}">
             </div>
             <div></div>
         </div>
@@ -117,7 +122,7 @@ function addVerdiep(btn) {
     const nummerInput = body.querySelector('.verdiep-nummer');
     nummerInput.addEventListener('input', () => {
         const titleSpan = card.querySelector('.card-title-text');
-        titleSpan.textContent = nummerInput.value ? `Verdieping ${nummerInput.value}` : 'Verdieping';
+        titleSpan.textContent = `Verdieping ${formatVerdiep(nummerInput.value)}`;
     });
 
     container.appendChild(card);
@@ -138,19 +143,18 @@ function addCollector(btn) {
                 <input type="number" class="collector-nummer" placeholder="bijv. 1" min="1" value="${count}">
             </div>
             <div>
-                <label>Type</label>
-                <select class="collector-type">
-                    <option value="vloer">Vloer</option>
-                    <option value="radiator">Radiator</option>
+                <label>Druk (bar)</label>
+                <select class="collector-druk">
+                    <option value="4" selected>4 bar</option>
+                    <option value="6">6 bar</option>
                 </select>
             </div>
             <div>
-                <label>Druk</label>
-                <input type="number" class="collector-druk" placeholder="Druk (optioneel)" step="any">
+                <label>Aantal kringen</label>
+                <input type="number" class="collector-aantal-kringen" placeholder="bijv. 5" min="0" value="0">
             </div>
         </div>
         <div class="children-container" data-children="kringen"></div>
-        <button type="button" class="btn btn-add btn-add-child" onclick="addKring(this)">+ Kring</button>
     `;
 
     const nummerInput = body.querySelector('.collector-nummer');
@@ -159,37 +163,63 @@ function addCollector(btn) {
         titleSpan.textContent = nummerInput.value ? `Collector ${nummerInput.value}` : 'Collector';
     });
 
+    const aantalInput = body.querySelector('.collector-aantal-kringen');
+    aantalInput.addEventListener('change', () => {
+        syncKringen(body);
+    });
+
     container.appendChild(card);
 }
 
-// ===== Add Kring =====
-function addKring(btn) {
-    const container = btn.previousElementSibling;
-    const count = container.children.length + 1;
+// ===== Sync kringen based on aantal =====
+function syncKringen(collectorBody) {
+    const aantalInput = collectorBody.querySelector('.collector-aantal-kringen');
+    const kringenContainer = collectorBody.querySelector('.children-container[data-children="kringen"]');
+    const desired = parseInt(aantalInput.value) || 0;
+    const current = kringenContainer.children.length;
 
-    const { card, bodyId } = createCard('kring', 'Kring', `Kring ${count}`);
+    if (desired > current) {
+        for (let i = current + 1; i <= desired; i++) {
+            addKringToContainer(kringenContainer, i);
+        }
+    } else if (desired < current) {
+        while (kringenContainer.children.length > desired) {
+            kringenContainer.lastChild.remove();
+        }
+    }
+}
+
+// ===== Add Kring to container =====
+function addKringToContainer(container, num) {
+    const { card, bodyId } = createCard('kring', 'Kring', `Kring ${num}`);
     const body = card.querySelector(`#${bodyId}`);
 
     body.innerHTML = `
         <div class="field-row cols-4">
             <div>
                 <label>Nummer</label>
-                <input type="number" class="kring-nummer" placeholder="bijv. 1" min="1" value="${count}">
-            </div>
-            <div>
-                <label>m²</label>
-                <input type="number" class="kring-m2" placeholder="bijv. 25" step="any" min="0">
+                <input type="number" class="kring-nummer" placeholder="bijv. 1" min="1" value="${num}">
             </div>
             <div>
                 <label>Legpatroon</label>
                 <select class="kring-legpatroon">
-                    <option value="slak">Slak</option>
-                    <option value="meandr">Meandr</option>
+                    <option value="">-- Kies --</option>
+                    <option value="7.5">7.5</option>
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                    <option value="25">25</option>
+                    <option value="30">30</option>
+                    <option value="andere">Andere</option>
                 </select>
             </div>
             <div>
                 <label>Lengte (m)</label>
                 <input type="number" class="kring-lengte" placeholder="bijv. 80" step="any" min="0">
+            </div>
+            <div>
+                <label>m&sup2;</label>
+                <input type="number" class="kring-m2" placeholder="bijv. 25" step="any" min="0">
             </div>
         </div>
     `;
@@ -207,14 +237,13 @@ function addKring(btn) {
 function collectData() {
     const project = projectNaamInput.value.trim();
 
-    const blokken = [];
-    const blokCards = blokkenContainer.querySelectorAll(':scope > .card.level-blok');
+    const gebouwen = [];
+    const gebouwCards = gebouwenContainer.querySelectorAll(':scope > .card.level-blok');
 
-    blokCards.forEach(blokCard => {
-        const body = blokCard.querySelector('.card-body');
-        const blok = {
+    gebouwCards.forEach(gebouwCard => {
+        const body = gebouwCard.querySelector('.card-body');
+        const gebouw = {
             naam: body.querySelector('.blok-naam').value.trim(),
-            adres: body.querySelector('.blok-adres').value.trim(),
             verdiepen: []
         };
 
@@ -222,18 +251,17 @@ function collectData() {
         verdiepCards.forEach(vCard => {
             const vBody = vCard.querySelector('.card-body');
             const verdiep = {
-                nummer: parseInt(vBody.querySelector('.verdiep-nummer').value) || 0,
+                nummer: formatVerdiep(vBody.querySelector('.verdiep-nummer').value),
                 collectoren: []
             };
 
             const collectorCards = vBody.querySelectorAll(':scope > .children-container > .card.level-collector');
             collectorCards.forEach(cCard => {
                 const cBody = cCard.querySelector('.card-body');
-                const drukVal = cBody.querySelector('.collector-druk').value;
                 const collector = {
                     nummer: parseInt(cBody.querySelector('.collector-nummer').value) || 0,
-                    type: cBody.querySelector('.collector-type').value,
-                    druk: drukVal ? parseFloat(drukVal) : null,
+                    druk: parseFloat(cBody.querySelector('.collector-druk').value),
+                    aantalKringen: parseInt(cBody.querySelector('.collector-aantal-kringen').value) || 0,
                     kringen: []
                 };
 
@@ -242,30 +270,30 @@ function collectData() {
                     const kBody = kCard.querySelector('.card-body');
                     collector.kringen.push({
                         nummer: parseInt(kBody.querySelector('.kring-nummer').value) || 0,
-                        m2: parseFloat(kBody.querySelector('.kring-m2').value) || 0,
                         legpatroon: kBody.querySelector('.kring-legpatroon').value,
-                        lengte: parseFloat(kBody.querySelector('.kring-lengte').value) || 0
+                        lengte: parseFloat(kBody.querySelector('.kring-lengte').value) || 0,
+                        m2: parseFloat(kBody.querySelector('.kring-m2').value) || 0
                     });
                 });
 
                 verdiep.collectoren.push(collector);
             });
 
-            blok.verdiepen.push(verdiep);
+            gebouw.verdiepen.push(verdiep);
         });
 
-        blokken.push(blok);
+        gebouwen.push(gebouw);
     });
 
-    return { project, blokken };
+    return { project, gebouwen };
 }
 
 // ===== Validation =====
 function validate(data) {
     if (!data.project) return 'Vul een projectnaam in.';
-    if (data.blokken.length === 0) return 'Voeg minstens één blok toe.';
-    for (const blok of data.blokken) {
-        if (!blok.naam) return 'Elk blok moet een naam hebben.';
+    if (data.gebouwen.length === 0) return 'Voeg minstens één gebouw toe.';
+    for (const gebouw of data.gebouwen) {
+        if (!gebouw.naam) return 'Elk gebouw moet een naam hebben.';
     }
     return null;
 }

@@ -217,6 +217,7 @@ select:focus {
     margin-bottom: 12px;
 }
 
+.field-row.cols-1 { grid-template-columns: 1fr; }
 .field-row.cols-2 { grid-template-columns: 1fr 1fr; }
 .field-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
 .field-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
