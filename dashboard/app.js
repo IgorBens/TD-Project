@@ -1323,11 +1323,12 @@ function initApp() {
                 const thumbUrl = isImage
                     ? `${WEBHOOK_SERVE_FILE}?project_id=${selectedProject.id}&folder_path=${encodeURIComponent(folderPath)}&file_name=${encodeURIComponent(file.name)}`
                     : '';
+                const fileUrl = `${WEBHOOK_SERVE_FILE}?project_id=${selectedProject.id}&folder_path=${encodeURIComponent(folderPath)}&file_name=${encodeURIComponent(file.name)}`;
                 return `
-                    <div class="doc-file-item${isImage ? ' doc-file-item--image' : ''}">
+                    <div class="doc-file-item${isImage ? ' doc-file-item--image' : ''}" ${isImage ? `data-lightbox-url="${fileUrl}" data-file-name="${escapeHtml(file.name)}"` : ''} style="${isImage ? 'cursor:pointer' : ''}">
                         ${isImage
                             ? `<img class="doc-file-thumb" src="${thumbUrl}" alt="" loading="lazy">`
-                            : '<span class="doc-file-icon">&#x1F4C4;</span>'}
+                            : `<a href="${fileUrl}" target="_blank" class="doc-file-icon" style="text-decoration:none">&#x1F4C4;</a>`}
                         <span class="doc-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
                         <span class="doc-file-size">${sizeKB} KB</span>
                     </div>
@@ -1494,6 +1495,73 @@ function initApp() {
         }
     }
 }
+
+// ===== Lightbox =====
+(function() {
+    const overlay = document.getElementById('lightboxOverlay');
+    const img = document.getElementById('lightboxImg');
+    const caption = document.getElementById('lightboxCaption');
+    const closeBtn = document.getElementById('lightboxClose');
+    const prevBtn = document.getElementById('lightboxPrev');
+    const nextBtn = document.getElementById('lightboxNext');
+    let currentItems = [];
+    let currentIndex = 0;
+
+    function openLightbox(items, index) {
+        currentItems = items;
+        currentIndex = index;
+        showCurrent();
+        overlay.classList.add('active');
+    }
+
+    function closeLightbox() {
+        overlay.classList.remove('active');
+    }
+
+    function showCurrent() {
+        const item = currentItems[currentIndex];
+        img.src = item.url;
+        caption.textContent = item.name;
+        prevBtn.style.display = currentItems.length > 1 ? '' : 'none';
+        nextBtn.style.display = currentItems.length > 1 ? '' : 'none';
+    }
+
+    function navigate(dir) {
+        currentIndex = (currentIndex + dir + currentItems.length) % currentItems.length;
+        showCurrent();
+    }
+
+    closeBtn.addEventListener('click', closeLightbox);
+    prevBtn.addEventListener('click', () => navigate(-1));
+    nextBtn.addEventListener('click', () => navigate(1));
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeLightbox();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (!overlay.classList.contains('active')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') navigate(-1);
+        if (e.key === 'ArrowRight') navigate(1);
+    });
+
+    // Delegate click on image file items
+    document.addEventListener('click', (e) => {
+        const item = e.target.closest('.doc-file-item[data-lightbox-url]');
+        if (!item) return;
+        // Gather all image items in the same list
+        const list = item.closest('.doc-files-list');
+        if (!list) return;
+        const allImageItems = Array.from(list.querySelectorAll('.doc-file-item[data-lightbox-url]'));
+        const items = allImageItems.map(el => ({
+            url: el.dataset.lightboxUrl,
+            name: el.dataset.fileName
+        }));
+        const index = allImageItems.indexOf(item);
+        openLightbox(items, index);
+    });
+
+    window._openLightbox = openLightbox;
+})();
 
 // ===== Global utility =====
 function escapeHtml(str) {
