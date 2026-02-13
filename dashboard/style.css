@@ -1043,11 +1043,89 @@ select:focus {
     margin: 0;
 }
 
-.vd-item-header input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+.vd-item-header input[type="checkbox"],
+.vd-kring input[type="checkbox"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
     cursor: pointer;
-    accent-color: #2a9d8f;
+    position: relative;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+
+.vd-item-header input[type="checkbox"]:checked,
+.vd-kring input[type="checkbox"]:checked {
+    background: #2d6a4f;
+    border-color: #2d6a4f;
+}
+
+.vd-item-header input[type="checkbox"]:checked::after,
+.vd-kring input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 6px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+}
+
+.vd-item-header input[type="checkbox"]:indeterminate,
+.vd-kring input[type="checkbox"]:indeterminate {
+    background: #e8890c;
+    border-color: #e8890c;
+}
+
+.vd-item-header input[type="checkbox"]:indeterminate::after,
+.vd-kring input[type="checkbox"]:indeterminate::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 6px;
+    width: 8px;
+    height: 2.5px;
+    background: #fff;
+    border-radius: 1px;
+}
+
+#vdSelectAll {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+
+#vdSelectAll:checked {
+    background: #2d6a4f;
+    border-color: #2d6a4f;
+}
+
+#vdSelectAll:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 6px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
 }
 
 .vd-level-gebouw {
@@ -1094,13 +1172,6 @@ select:focus {
     font-weight: normal;
     margin: 0;
     font-size: 0.85rem;
-}
-
-.vd-kring input[type="checkbox"] {
-    width: 15px;
-    height: 15px;
-    cursor: pointer;
-    accent-color: #2a9d8f;
 }
 
 .vd-kring-info {
