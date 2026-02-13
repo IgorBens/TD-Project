@@ -3,6 +3,10 @@ const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
+const WEBHOOK_DOCS_UPLOAD = WEBHOOK_BASE + '/thermoduct-docs-upload';
+const WEBHOOK_DOCS_LIST = WEBHOOK_BASE + '/thermoduct-docs-list';
+const WEBHOOK_DOCS_DELETE = WEBHOOK_BASE + '/thermoduct-docs-delete';
+const WEBHOOK_DOCS_FILE = WEBHOOK_BASE + '/thermoduct-docs-file';
 
 // Odoo stage names (must match Odoo project stages)
 const STAGES = {
@@ -172,6 +176,11 @@ function initApp() {
     window.toggleVdVerdiep = toggleVdVerdiep;
     window.toggleVdCollector = toggleVdCollector;
     window.toggleVdKring = toggleVdKring;
+    window.toggleDocGebouw = toggleDocGebouw;
+    window.toggleDocVerdiep = toggleDocVerdiep;
+    window.toggleDocCollector = toggleDocCollector;
+    window.uploadDocFiles = uploadDocFiles;
+    window.deleteDocFile = deleteDocFile;
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -186,6 +195,9 @@ function initApp() {
             }
             if (tab.dataset.tab === 'vordering') {
                 renderVordering();
+            }
+            if (tab.dataset.tab === 'documenten') {
+                renderDocumenten();
             }
         });
     });
@@ -1251,6 +1263,250 @@ function initApp() {
         `).join('');
 
         updateVdCount();
+    }
+
+    // =============================================
+    // ===== DOCUMENTEN TAB =====
+    // =============================================
+
+    // Cache of loaded files per collector path
+    const docCache = {};
+
+    function getDocPath(gebouwNaam, verdiepNr, collectorNr) {
+        // Sanitize names for path use
+        const safe = str => String(str).replace(/[^a-zA-Z0-9._-]/g, '_');
+        return `${safe(gebouwNaam)}/${safe(verdiepNr)}/Collector_${safe(collectorNr)}`;
+    }
+
+    function toggleDocGebouw(headerEl) {
+        const body = headerEl.nextElementSibling;
+        const chevron = headerEl.querySelector('.doc-chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+    }
+
+    function toggleDocVerdiep(headerEl) {
+        const body = headerEl.nextElementSibling;
+        const chevron = headerEl.querySelector('.doc-chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+    }
+
+    function toggleDocCollector(headerEl) {
+        const body = headerEl.nextElementSibling;
+        const chevron = headerEl.querySelector('.doc-chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+
+        // Load files when opening
+        if (body.classList.contains('open')) {
+            const path = headerEl.dataset.docPath;
+            if (path && !docCache[path]) {
+                loadDocFiles(path, body.querySelector('.doc-thumbnails'));
+            }
+        }
+    }
+
+    async function loadDocFiles(path, thumbnailsEl) {
+        if (!selectedProject?.id) return;
+        thumbnailsEl.innerHTML = '<p class="doc-loading">Laden...</p>';
+
+        try {
+            const res = await fetch(`${WEBHOOK_DOCS_LIST}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}`);
+            if (!res.ok) throw new Error('Fout bij laden');
+            const files = await res.json();
+
+            docCache[path] = files;
+            renderThumbnails(path, files, thumbnailsEl);
+        } catch (err) {
+            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Geen bestanden of niet verbonden.</p>';
+            docCache[path] = [];
+        }
+    }
+
+    function renderThumbnails(path, files, thumbnailsEl) {
+        if (!files || files.length === 0) {
+            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
+            return;
+        }
+
+        thumbnailsEl.innerHTML = files.map(file => `
+            <div class="doc-thumb">
+                <img src="${WEBHOOK_DOCS_FILE}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}&file=${encodeURIComponent(file.name)}"
+                     alt="${escapeHtml(file.name)}"
+                     loading="lazy"
+                     onclick="window.open(this.src, '_blank')">
+                <div class="doc-thumb-info">
+                    <span class="doc-thumb-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                    <button type="button" class="btn btn-remove doc-thumb-delete"
+                            onclick="deleteDocFile('${escapeHtml(path)}', '${escapeHtml(file.name)}', this)"
+                            title="Verwijderen">&#x2715;</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function uploadDocFiles(input, path) {
+        if (!selectedProject?.id || !input.files.length) return;
+
+        const collectorBody = input.closest('.doc-collector-body');
+        const thumbnailsEl = collectorBody.querySelector('.doc-thumbnails');
+        const statusEl = collectorBody.querySelector('.doc-upload-status');
+
+        const files = Array.from(input.files);
+        statusEl.textContent = `Uploaden: 0/${files.length}...`;
+        statusEl.classList.add('active');
+
+        let uploaded = 0;
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('project_id', selectedProject.id);
+            formData.append('path', path);
+
+            try {
+                const res = await fetch(WEBHOOK_DOCS_UPLOAD, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) throw new Error('Upload failed');
+                uploaded++;
+                statusEl.textContent = `Uploaden: ${uploaded}/${files.length}...`;
+            } catch (err) {
+                console.error('Upload error:', err);
+            }
+        }
+
+        statusEl.textContent = `${uploaded} bestand(en) geupload.`;
+        setTimeout(() => {
+            statusEl.classList.remove('active');
+            statusEl.textContent = '';
+        }, 3000);
+
+        // Refresh file list
+        delete docCache[path];
+        await loadDocFiles(path, thumbnailsEl);
+
+        // Reset input
+        input.value = '';
+    }
+
+    async function deleteDocFile(path, fileName, btn) {
+        if (!confirm(`"${fileName}" verwijderen?`)) return;
+        if (!selectedProject?.id) return;
+
+        try {
+            await fetch(WEBHOOK_DOCS_DELETE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: selectedProject.id,
+                    path: path,
+                    file: fileName
+                })
+            });
+
+            // Remove from cache and re-render
+            const thumbEl = btn.closest('.doc-thumb');
+            const thumbnailsEl = thumbEl.parentElement;
+            thumbEl.remove();
+
+            if (docCache[path]) {
+                docCache[path] = docCache[path].filter(f => f.name !== fileName);
+                if (docCache[path].length === 0) {
+                    thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
+                }
+            }
+        } catch (err) {
+            console.error('Delete error:', err);
+        }
+    }
+
+    function renderDocumenten() {
+        const data = collectData();
+        const container = document.getElementById('docContainer');
+        const statusText = document.getElementById('docStatusText');
+
+        if (!selectedProject?.id) {
+            statusText.textContent = 'Laad een project om documenten te beheren.';
+            container.innerHTML = '<p class="rv-empty">Laad een project en vul de invoer tab in om de documentenstructuur te zien.</p>';
+            return;
+        }
+
+        if (!data.gebouwen || data.gebouwen.length === 0) {
+            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+            container.innerHTML = '<p class="rv-empty">Vul eerst de invoer tab in om de mapstructuur te genereren.</p>';
+            return;
+        }
+
+        // Count collectors
+        let totalCollectors = 0;
+        data.gebouwen.forEach(g => g.verdiepen.forEach(v => { totalCollectors += v.collectoren.length; }));
+        statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — ${totalCollectors} collector(en)`;
+
+        // Clear cache on re-render
+        Object.keys(docCache).forEach(k => delete docCache[k]);
+
+        container.innerHTML = data.gebouwen.map(gebouw => `
+            <div class="doc-gebouw">
+                <div class="doc-gebouw-header" onclick="toggleDocGebouw(this)">
+                    <div class="doc-header-left">
+                        <span class="doc-chevron open">&#9654;</span>
+                        <span class="doc-folder-icon">&#x1F4C1;</span>
+                        <span class="badge badge-blok">Gebouw</span>
+                        <strong>${escapeHtml(gebouw.naam || 'Naamloos')}</strong>
+                    </div>
+                    <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
+                </div>
+                <div class="doc-gebouw-body open">
+                    ${gebouw.verdiepen.map(verdiep => `
+                        <div class="doc-verdiep">
+                            <div class="doc-verdiep-header" onclick="toggleDocVerdiep(this)">
+                                <div class="doc-header-left">
+                                    <span class="doc-chevron open">&#9654;</span>
+                                    <span class="doc-folder-icon">&#x1F4C2;</span>
+                                    <span class="badge badge-verdiep">Verdiep</span>
+                                    <strong>${verdiep.nummer}</strong>
+                                </div>
+                                <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
+                            </div>
+                            <div class="doc-verdiep-body open">
+                                ${verdiep.collectoren.map(col => {
+                                    const docPath = getDocPath(gebouw.naam, verdiep.nummer, col.nummer);
+                                    return `
+                                        <div class="doc-collector">
+                                            <div class="doc-collector-header" data-doc-path="${escapeHtml(docPath)}" onclick="toggleDocCollector(this)">
+                                                <div class="doc-header-left">
+                                                    <span class="doc-chevron">&#9654;</span>
+                                                    <span class="doc-folder-icon">&#x1F4F7;</span>
+                                                    <span class="badge badge-collector">Col ${col.nummer}</span>
+                                                    <strong>${escapeHtml(col.naam || '')}</strong>
+                                                    <span class="doc-meta">${col.aantalKringen} kringen</span>
+                                                </div>
+                                            </div>
+                                            <div class="doc-collector-body">
+                                                <div class="doc-upload-area">
+                                                    <label class="doc-upload-btn">
+                                                        <input type="file" accept="image/*" multiple
+                                                               onchange="uploadDocFiles(this, '${escapeHtml(docPath)}')"
+                                                               style="display:none">
+                                                        &#x1F4F7; Foto's uploaden
+                                                    </label>
+                                                    <span class="doc-upload-status"></span>
+                                                </div>
+                                                <div class="doc-thumbnails">
+                                                    <p class="doc-loading" style="color:#868e96;">Klik om foto's te laden.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
     }
 }
 

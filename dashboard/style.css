@@ -1190,3 +1190,233 @@ select:focus {
     font-size: 0.75rem;
     color: #6c757d;
 }
+
+/* =============================================
+   ===== DOCUMENTEN TAB =====
+   ============================================= */
+
+.doc-status-bar {
+    padding: 10px 14px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 16px;
+}
+
+.doc-status-text {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.doc-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Gebouw level */
+.doc-gebouw {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-left: 4px solid #e63946;
+    overflow: hidden;
+}
+
+.doc-gebouw-header,
+.doc-verdiep-header,
+.doc-collector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.doc-gebouw-header:hover,
+.doc-verdiep-header:hover,
+.doc-collector-header:hover {
+    background: #f8f9fa;
+}
+
+.doc-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.doc-chevron {
+    transition: transform 0.2s;
+    font-size: 0.7rem;
+    color: #868e96;
+}
+
+.doc-chevron.open {
+    transform: rotate(90deg);
+}
+
+.doc-folder-icon {
+    font-size: 1.1rem;
+}
+
+.doc-count {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.doc-meta {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-left: 4px;
+}
+
+/* Bodies - collapsible */
+.doc-gebouw-body,
+.doc-verdiep-body,
+.doc-collector-body {
+    display: none;
+}
+
+.doc-gebouw-body.open,
+.doc-verdiep-body.open,
+.doc-collector-body.open {
+    display: block;
+}
+
+.doc-gebouw-body {
+    padding: 4px 0 4px 4px;
+}
+
+/* Verdiep level */
+.doc-verdiep {
+    border-left: 3px solid #457b9d;
+    margin: 4px 4px 4px 12px;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.doc-verdiep-body {
+    padding: 4px 0 4px 4px;
+}
+
+/* Collector level */
+.doc-collector {
+    border-left: 3px solid #2a9d8f;
+    margin: 4px 4px 4px 12px;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.doc-collector-body {
+    padding: 8px 14px 14px;
+    border-top: 1px solid #f0f2f5;
+}
+
+/* Upload area */
+.doc-upload-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.doc-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #457b9d;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.doc-upload-btn:hover {
+    background: #1d3557;
+}
+
+.doc-upload-status {
+    font-size: 0.8rem;
+    color: #868e96;
+    display: none;
+}
+
+.doc-upload-status.active {
+    display: inline;
+    color: #457b9d;
+    font-weight: 600;
+}
+
+/* Thumbnails grid */
+.doc-thumbnails {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+.doc-thumbnails p {
+    grid-column: 1 / -1;
+}
+
+.doc-thumb {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f8f9fa;
+    transition: box-shadow 0.15s;
+}
+
+.doc-thumb:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.doc-thumb img {
+    width: 100%;
+    height: 110px;
+    object-fit: cover;
+    display: block;
+    cursor: pointer;
+}
+
+.doc-thumb-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    gap: 4px;
+}
+
+.doc-thumb-name {
+    font-size: 0.7rem;
+    color: #6c757d;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.doc-thumb-delete {
+    padding: 2px 4px !important;
+    font-size: 0.7rem !important;
+}
+
+.doc-loading {
+    font-size: 0.85rem;
+    font-style: italic;
+    padding: 8px 0;
+}
+
+@media (max-width: 600px) {
+    .doc-thumbnails {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+    .doc-thumb img {
+        height: 80px;
+    }
+}
