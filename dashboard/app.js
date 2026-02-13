@@ -1363,7 +1363,6 @@ function initApp() {
     }
 
     async function deleteDocFile(folderPath, fileName, btnEl) {
-        if (!confirm(`Bestand "${fileName}" verwijderen?`)) return;
         if (!selectedProject?.id) return;
 
         btnEl.disabled = true;
