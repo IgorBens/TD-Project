@@ -1,0 +1,122 @@
+{
+  "name": "Thermoduct - Upload Foto's",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "thermoduct-upload",
+        "responseMode": "responseNode",
+        "formTitle": "Foto's uploaden",
+        "formDescription": "Upload foto's voor deze collector",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Foto's",
+              "fieldType": "file",
+              "acceptFileTypes": ".jpg,.jpeg,.png,.heic,.webp",
+              "multipleFiles": true,
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "u1p2l3o4-0001-4000-8000-000000000001",
+      "name": "Form Trigger",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = input.formQueryParameters?.project_id || '';\nconst folderPath = input.formQueryParameters?.folder_path || '';\n\nif (!projectId || !folderPath) {\n  throw new Error('Geen project_id of folder_path opgegeven.');\n}\n\n// Beveiligingscheck\nif (folderPath.includes('..') || folderPath.startsWith('/')) {\n  throw new Error('Ongeldig pad.');\n}\n\nconst targetDir = `${NAS_BASE_PATH}/${projectId}/${folderPath}`;\n\nreturn [{ json: { projectId, folderPath, targetDir } }];"
+      },
+      "id": "u1p2l3o4-0001-4000-8000-000000000002",
+      "name": "Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "command": "={{ `mkdir -p '${$json.targetDir}'` }}",
+        "options": {}
+      },
+      "id": "u1p2l3o4-0001-4000-8000-000000000003",
+      "name": "Create Dir",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verplaats geüploade bestanden naar de doelmap\nconst setup = $('Setup').first().json;\nconst formData = $('Form Trigger').first();\nconst files = formData.binary || {};\nconst targetDir = setup.targetDir;\n\nconst commands = [];\nlet fileCount = 0;\n\nfor (const [key, fileInfo] of Object.entries(files)) {\n  if (fileInfo.fileName) {\n    // n8n slaat uploads tijdelijk op, we moeten ze kopiëren\n    commands.push({\n      fileName: fileInfo.fileName,\n      mimeType: fileInfo.mimeType,\n      key\n    });\n    fileCount++;\n  }\n}\n\nreturn [{ json: { targetDir, fileCount, files: commands } }];"
+      },
+      "id": "u1p2l3o4-0001-4000-8000-000000000004",
+      "name": "Prep Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Setup').first().json.targetDir + '/' + $binary.data?.fileName }}",
+        "options": {}
+      },
+      "id": "u1p2l3o4-0001-4000-8000-000000000005",
+      "name": "Save Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ `Foto's succesvol geüpload naar ${$('Setup').first().json.folderPath}. U kunt dit venster sluiten.` }}",
+        "options": {}
+      },
+      "id": "u1p2l3o4-0001-4000-8000-000000000006",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1100, 300]
+    }
+  ],
+  "connections": {
+    "Form Trigger": {
+      "main": [
+        [{ "node": "Setup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Setup": {
+      "main": [
+        [{ "node": "Create Dir", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Dir": {
+      "main": [
+        [{ "node": "Prep Files", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Files": {
+      "main": [
+        [{ "node": "Save Files", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Files": {
+      "main": [
+        [{ "node": "Respond", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}

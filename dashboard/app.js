@@ -5,8 +5,8 @@ const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
 const WEBHOOK_FOLDERS = WEBHOOK_BASE + '/thermoduct-folders';
 const WEBHOOK_FOLDER_DELETE = WEBHOOK_BASE + '/thermoduct-folder-delete';
-// Document management endpoints (TODO: configure when file server is set up)
-const DOCS_API_BASE = '';
+const WEBHOOK_FILES = WEBHOOK_BASE + '/thermoduct-files';
+const WEBHOOK_UPLOAD_FORM = WEBHOOK_BASE + '/thermoduct-upload';
 
 // Odoo stage names (must match Odoo project stages)
 const STAGES = {
@@ -179,9 +179,8 @@ function initApp() {
     window.toggleDocGebouw = toggleDocGebouw;
     window.toggleDocVerdiep = toggleDocVerdiep;
     window.toggleDocCollector = toggleDocCollector;
-    window.uploadDocFiles = uploadDocFiles;
-    window.deleteDocFile = deleteDocFile;
     window.deleteDocFolder = deleteDocFolder;
+    window.openUploadForm = openUploadForm;
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -1272,13 +1271,7 @@ function initApp() {
     // =============================================
 
     // Cache of loaded files per collector path
-    const docCache = {};
 
-    function getDocPath(gebouwNaam, verdiepNr, collectorNr) {
-        // Sanitize names for path use
-        const safe = str => String(str).replace(/[^a-zA-Z0-9._-]/g, '_');
-        return `${safe(gebouwNaam)}/${safe(verdiepNr)}/Collector_${safe(collectorNr)}`;
-    }
 
     function toggleDocGebouw(headerEl) {
         const body = headerEl.nextElementSibling;
@@ -1302,58 +1295,61 @@ function initApp() {
 
         // Load files when opening
         if (body.classList.contains('open')) {
-            const path = headerEl.dataset.docPath;
-            if (path && !docCache[path]) {
-                loadDocFiles(path, body.querySelector('.doc-thumbnails'));
+            const folderPath = headerEl.dataset.folderPath;
+            if (folderPath) {
+                loadDocFiles(folderPath, body.querySelector('.doc-files-list'));
             }
         }
     }
 
-    async function loadDocFiles(path, thumbnailsEl) {
-        if (!selectedProject?.id || !DOCS_API_BASE) {
-            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Documentbeheer nog niet geconfigureerd.</p>';
-            return;
+    async function loadDocFiles(folderPath, filesListEl) {
+        if (!selectedProject?.id) return;
+
+        filesListEl.innerHTML = '<p class="doc-loading">Bestanden laden...</p>';
+
+        try {
+            const res = await fetch(`${WEBHOOK_FILES}?project_id=${selectedProject.id}&folder_path=${encodeURIComponent(folderPath)}`);
+            const data = await res.json();
+
+            if (!data.success || !data.exists || !data.files || data.files.length === 0) {
+                filesListEl.innerHTML = '<p class="doc-loading">Nog geen bestanden.</p>';
+                return;
+            }
+
+            filesListEl.innerHTML = data.files.map(file => {
+                const sizeKB = Math.round(file.size / 1024);
+                return `
+                    <div class="doc-file-item">
+                        <span class="doc-file-icon">&#x1F4C4;</span>
+                        <span class="doc-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                        <span class="doc-file-size">${sizeKB} KB</span>
+                    </div>
+                `;
+            }).join('');
+        } catch (err) {
+            filesListEl.innerHTML = `<p class="doc-loading">Fout bij laden: ${escapeHtml(err.message)}</p>`;
         }
-        // TODO: implement with HTTP file server
     }
 
-    function renderThumbnails(path, files, thumbnailsEl) {
-        if (!files || files.length === 0) {
-            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
-            return;
+    function openUploadForm(projectId, folderPath) {
+        const url = `${WEBHOOK_UPLOAD_FORM}?project_id=${encodeURIComponent(projectId)}&folder_path=${encodeURIComponent(folderPath)}`;
+        const popup = window.open(url, '_blank', 'width=500,height=400');
+        // Wanneer het popup venster sluit, herlaad bestanden
+        if (popup) {
+            const timer = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(timer);
+                    // Herlaad alle geopende collector bodies
+                    document.querySelectorAll('.doc-collector-header').forEach(header => {
+                        const body = header.nextElementSibling;
+                        if (body && body.classList.contains('open')) {
+                            const fp = header.dataset.folderPath;
+                            if (fp) loadDocFiles(fp, body.querySelector('.doc-files-list'));
+                        }
+                    });
+                }
+            }, 500);
         }
-
-        thumbnailsEl.innerHTML = files.map(file => `
-            <div class="doc-thumb">
-                <img src="${file.url}"
-                     alt="${escapeHtml(file.name)}"
-                     loading="lazy"
-                     onclick="window.open(this.src, '_blank')">
-                <div class="doc-thumb-info">
-                    <span class="doc-thumb-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
-                    <button type="button" class="btn btn-remove doc-thumb-delete"
-                            onclick="deleteDocFile('${escapeHtml(path)}', '${escapeHtml(file.name)}', this)"
-                            title="Verwijderen">&#x2715;</button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    async function uploadDocFiles(input, path) {
-        if (!selectedProject?.id || !input.files.length) return;
-        if (!DOCS_API_BASE) {
-            alert('Documentbeheer nog niet geconfigureerd.');
-            input.value = '';
-            return;
-        }
-        // TODO: implement with HTTP file server
-        input.value = '';
-    }
-
-    async function deleteDocFile(path, fileName, btn) {
-        if (!confirm(`"${fileName}" verwijderen?`)) return;
-        if (!selectedProject?.id || !DOCS_API_BASE) return;
-        // TODO: implement with HTTP file server
     }
 
     async function deleteDocFolder(folderPath, label, btnEl) {
@@ -1460,7 +1456,7 @@ function initApp() {
                                 <div class="doc-verdiep-body open">
                                     ${verdiep.collectoren.map(col => `
                                         <div class="doc-collector">
-                                            <div class="doc-collector-header" onclick="toggleDocCollector(this)">
+                                            <div class="doc-collector-header" data-folder-path="${escapeHtml(col.path)}" onclick="toggleDocCollector(this)">
                                                 <div class="doc-header-left">
                                                     <span class="doc-chevron">&#9654;</span>
                                                     <span class="doc-folder-icon">&#x1F4F7;</span>
@@ -1468,11 +1464,14 @@ function initApp() {
                                                     <strong>${escapeHtml(col.name)}</strong>
                                                 </div>
                                                 <div class="doc-header-right">
+                                                    <button class="doc-upload-btn" title="Foto's uploaden" onclick="event.stopPropagation(); openUploadForm('${selectedProject.id}', '${escapeHtml(col.path)}')">&#x1F4F7; Upload</button>
                                                     <button class="doc-delete-btn" title="Map verwijderen" onclick="event.stopPropagation(); deleteDocFolder('${escapeHtml(col.path)}', '${escapeHtml(col.name)}', this)">&#x1F5D1;</button>
                                                 </div>
                                             </div>
                                             <div class="doc-collector-body">
-                                                <p class="doc-folder-path">${escapeHtml(col.path)}</p>
+                                                <div class="doc-files-list">
+                                                    <p class="doc-loading">Klik om bestanden te laden...</p>
+                                                </div>
                                             </div>
                                         </div>
                                     `).join('')}

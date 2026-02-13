@@ -1301,11 +1301,64 @@ select:focus {
     margin-left: 4px;
 }
 
-.doc-folder-path {
+.doc-upload-btn {
+    background: #e8f4fd;
+    border: 1px solid #b6d4e8;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 3px 10px;
+    color: #1a73b5;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.doc-upload-btn:hover {
+    background: #d0eafb;
+    border-color: #1a73b5;
+}
+
+.doc-files-list {
+    padding: 8px 14px;
+}
+
+.doc-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    transition: background 0.1s;
+}
+
+.doc-file-item:hover {
+    background: #f1f3f5;
+}
+
+.doc-file-icon {
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.doc-file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #343a40;
+}
+
+.doc-file-size {
     font-size: 0.75rem;
     color: #adb5bd;
-    font-family: monospace;
-    margin: 4px 14px;
+    flex-shrink: 0;
+}
+
+.doc-loading {
+    color: #868e96;
+    font-size: 0.85rem;
+    margin: 4px 0;
 }
 
 /* Bodies - collapsible */

@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Configuratie\nconst NAS_BASE_PATH = '/share/Projecten';\n\nconst input = $input.first().json;\nconst projectId = input.body?.project_id || '';\nconst folderPath = input.body?.folder_path || '';\n\nif (!projectId) throw new Error('Geen project_id opgegeven.');\nif (!folderPath) throw new Error('Geen folder_path opgegeven.');\n\n// Beveiligingscheck: voorkom path traversal\nif (folderPath.includes('..') || folderPath.startsWith('/')) {\n  throw new Error('Ongeldig pad.');\n}\n\nconst fullPath = `${NAS_BASE_PATH}/${projectId}/${folderPath}`;\n\nreturn [{ json: { projectId, folderPath, fullPath } }];"
+        "jsCode": "// Configuratie\nconst NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = input.body?.project_id || '';\nconst folderPath = input.body?.folder_path || '';\n\nif (!projectId) throw new Error('Geen project_id opgegeven.');\nif (!folderPath) throw new Error('Geen folder_path opgegeven.');\n\n// Beveiligingscheck: voorkom path traversal\nif (folderPath.includes('..') || folderPath.startsWith('/')) {\n  throw new Error('Ongeldig pad.');\n}\n\nconst fullPath = `${NAS_BASE_PATH}/${projectId}/${folderPath}`;\n\nreturn [{ json: { projectId, folderPath, fullPath } }];"
       },
       "id": "d1e2f3a4-0001-4000-8000-000000000002",
       "name": "Setup",

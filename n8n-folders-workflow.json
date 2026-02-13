@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Configuratie\nconst NAS_BASE_PATH = '/share/Projecten';\n\nconst projectId = $input.first().json.query?.project_id || '';\nif (!projectId) throw new Error('Geen project_id opgegeven.');\n\n// We gebruiken het project_id als mapnaam op de NAS\nconst projectPath = `${NAS_BASE_PATH}/${projectId}`;\n\nreturn [{ json: { projectId, projectPath } }];"
+        "jsCode": "// Configuratie\nconst NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst projectId = $input.first().json.query?.project_id || '';\nif (!projectId) throw new Error('Geen project_id opgegeven.');\n\n// We gebruiken het project_id als mapnaam op de NAS\nconst projectPath = `${NAS_BASE_PATH}/${projectId}`;\n\nreturn [{ json: { projectId, projectPath } }];"
       },
       "id": "f1a2b3c4-0001-4000-8000-000000000002",
       "name": "Setup",
