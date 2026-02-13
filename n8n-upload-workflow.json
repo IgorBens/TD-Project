@@ -82,6 +82,17 @@
       "name": "Form Ending",
       "type": "n8n-nodes-base.form",
       "typeVersion": 1,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "u1p2l3o4-0001-4000-8000-000000000007",
+      "name": "Aggregate",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
       "position": [1100, 300]
     }
   ],
@@ -107,6 +118,11 @@
       ]
     },
     "Save Files": {
+      "main": [
+        [{ "node": "Aggregate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate": {
       "main": [
         [{ "node": "Form Ending", "type": "main", "index": 0 }]
       ]
