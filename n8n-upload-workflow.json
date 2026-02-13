@@ -72,8 +72,8 @@
     },
     {
       "parameters": {
-        "operation": "completion",
-        "respondWith": "text",
+        "operation": "page",
+        "pageType": "formEnding",
         "completionTitle": "Upload gelukt!",
         "completionMessage": "Foto's zijn succesvol geüpload. U kunt dit venster sluiten.",
         "options": {}
