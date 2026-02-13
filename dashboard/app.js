@@ -1,5 +1,5 @@
 // ===== Configuration =====
-const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
+const WEBHOOK_BASE = '/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
