@@ -1,0 +1,92 @@
+{
+  "name": "Thermoduct - Delete File",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "thermoduct-file-delete",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "fd1a2b3c-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-file-delete"
+    },
+    {
+      "parameters": {
+        "jsCode": "const NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = input.body?.project_id || '';\nconst folderPath = input.body?.folder_path || '';\nconst fileName = input.body?.file_name || '';\n\nif (!projectId) throw new Error('Geen project_id opgegeven.');\nif (!folderPath) throw new Error('Geen folder_path opgegeven.');\nif (!fileName) throw new Error('Geen file_name opgegeven.');\n\nif (folderPath.includes('..') || folderPath.startsWith('/') || fileName.includes('..') || fileName.includes('/')) {\n  throw new Error('Ongeldig pad.');\n}\n\nconst filePath = `${NAS_BASE_PATH}/${projectId}/${folderPath}/${fileName}`;\n\nreturn [{ json: { projectId, folderPath, fileName, filePath } }];"
+      },
+      "id": "fd1a2b3c-0001-4000-8000-000000000002",
+      "name": "Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "command": "={{ `FILE='${$json.filePath}'; if [ ! -f \"$FILE\" ]; then echo 'NOT_FOUND'; else rm \"$FILE\" && echo 'DELETED' || echo 'ERROR'; fi` }}",
+        "options": {}
+      },
+      "id": "fd1a2b3c-0001-4000-8000-000000000003",
+      "name": "Delete File",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst stdout = (result.stdout || '').trim();\nconst setup = $('Setup').first().json;\n\nif (stdout === 'DELETED') {\n  return [{ json: { success: true, message: `Bestand '${setup.fileName}' verwijderd.` } }];\n} else if (stdout === 'NOT_FOUND') {\n  return [{ json: { success: false, message: `Bestand '${setup.fileName}' bestaat niet.` } }];\n} else {\n  return [{ json: { success: false, message: `Fout bij verwijderen van '${setup.fileName}'.` } }];\n}"
+      },
+      "id": "fd1a2b3c-0001-4000-8000-000000000004",
+      "name": "Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "fd1a2b3c-0001-4000-8000-000000000005",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Setup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Setup": {
+      "main": [
+        [{ "node": "Delete File", "type": "main", "index": 0 }]
+      ]
+    },
+    "Delete File": {
+      "main": [
+        [{ "node": "Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Response": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}

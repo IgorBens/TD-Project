@@ -7,6 +7,7 @@ const WEBHOOK_FOLDERS = WEBHOOK_BASE + '/thermoduct-folders';
 const WEBHOOK_FOLDER_DELETE = WEBHOOK_BASE + '/thermoduct-folder-delete';
 const WEBHOOK_FILES = WEBHOOK_BASE + '/thermoduct-files';
 const WEBHOOK_SERVE_FILE = WEBHOOK_BASE + '/thermoduct-serve-file';
+const WEBHOOK_FILE_DELETE = WEBHOOK_BASE + '/thermoduct-file-delete';
 const WEBHOOK_UPLOAD_FORM = 'http://46.225.76.46:5678/form/c939dab0-c13d-4f51-95b7-50ddc4068880';
 
 // Odoo stage names (must match Odoo project stages)
@@ -1331,6 +1332,7 @@ function initApp() {
                             : `<a href="${fileUrl}" target="_blank" class="doc-file-icon" style="text-decoration:none">&#x1F4C4;</a>`}
                         <span class="doc-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
                         <span class="doc-file-size">${sizeKB} KB</span>
+                        <button class="doc-file-delete" data-folder-path="${escapeHtml(folderPath)}" data-file-name="${escapeHtml(file.name)}" title="Verwijder bestand">&#x1F5D1;</button>
                     </div>
                 `;
             }).join('');
@@ -1357,6 +1359,47 @@ function initApp() {
                     });
                 }
             }, 500);
+        }
+    }
+
+    async function deleteDocFile(folderPath, fileName, btnEl) {
+        if (!confirm(`Bestand "${fileName}" verwijderen?`)) return;
+        if (!selectedProject?.id) return;
+
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+
+        try {
+            const res = await authFetch(WEBHOOK_FILE_DELETE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: selectedProject.id,
+                    folder_path: folderPath,
+                    file_name: fileName
+                })
+            });
+
+            const result = await res.json();
+            if (result.success) {
+                showStatus(result.message, 'success');
+                // Verwijder het bestand-item uit de lijst
+                const fileItem = btnEl.closest('.doc-file-item');
+                const filesList = fileItem?.closest('.doc-files-list');
+                fileItem?.remove();
+                // Als er geen bestanden meer zijn, toon melding
+                if (filesList && !filesList.querySelector('.doc-file-item')) {
+                    filesList.innerHTML = '<p class="doc-loading">Nog geen bestanden.</p>';
+                }
+            } else {
+                showStatus(result.message || 'Verwijderen mislukt.', 'error');
+                btnEl.disabled = false;
+                btnEl.textContent = '\u{1F5D1}';
+            }
+        } catch (err) {
+            showStatus(`Fout bij verwijderen: ${err.message}`, 'error');
+            btnEl.disabled = false;
+            btnEl.textContent = '\u{1F5D1}';
         }
     }
 
@@ -1544,11 +1587,23 @@ function initApp() {
         if (e.key === 'ArrowRight') navigate(1);
     });
 
-    // Delegate click on image file items
+    // Delegate click on file delete buttons
     document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.doc-file-delete');
+        if (!btn) return;
+        e.stopPropagation();
+        const folderPath = btn.dataset.folderPath;
+        const fileName = btn.dataset.fileName;
+        if (folderPath && fileName) {
+            deleteDocFile(folderPath, fileName, btn);
+        }
+    });
+
+    // Delegate click on image file items (lightbox)
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.doc-file-delete')) return;
         const item = e.target.closest('.doc-file-item[data-lightbox-url]');
         if (!item) return;
-        // Gather all image items in the same list
         const list = item.closest('.doc-files-list');
         if (!list) return;
         const allImageItems = Array.from(list.querySelectorAll('.doc-file-item[data-lightbox-url]'));
