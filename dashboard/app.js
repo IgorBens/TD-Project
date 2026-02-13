@@ -1465,6 +1465,18 @@ function initApp() {
                 return;
             }
 
+            // Bouw lookup voor collector namen vanuit invoerdata
+            const invoerData = collectData();
+            const collectorNaamLookup = {};
+            (invoerData.gebouwen || []).forEach(g => {
+                (g.verdiepen || []).forEach(v => {
+                    (v.collectoren || []).forEach(c => {
+                        const key = `${g.naam}/verdiep_${v.nummer}/collector_${c.nummer}`;
+                        if (c.naam) collectorNaamLookup[key] = c.naam;
+                    });
+                });
+            });
+
             // Tel totalen
             let totalVerdiepen = 0;
             let totalCollectoren = 0;
@@ -1504,14 +1516,18 @@ function initApp() {
                                     </div>
                                 </div>
                                 <div class="doc-verdiep-body open">
-                                    ${verdiep.collectoren.map(col => `
+                                    ${verdiep.collectoren.map(col => {
+                                        const lookupKey = `${gebouw.name}/${verdiep.name}/${col.name}`;
+                                        const colNaam = collectorNaamLookup[lookupKey];
+                                        const displayName = colNaam ? `${col.name} — ${colNaam}` : col.name;
+                                        return `
                                         <div class="doc-collector">
                                             <div class="doc-collector-header" data-folder-path="${escapeHtml(col.path)}" onclick="toggleDocCollector(this)">
                                                 <div class="doc-header-left">
                                                     <span class="doc-chevron">&#9654;</span>
                                                     <span class="doc-folder-icon">&#x1F4F7;</span>
                                                     <span class="badge badge-collector">Collector</span>
-                                                    <strong>${escapeHtml(col.name)}</strong>
+                                                    <strong>${escapeHtml(displayName)}</strong>
                                                 </div>
                                                 <div class="doc-header-right">
                                                     <button class="doc-upload-btn" title="Foto's uploaden" onclick="event.stopPropagation(); openUploadForm('${selectedProject.id}', '${escapeHtml(col.path)}')">&#x1F4F7; Upload</button>
@@ -1524,7 +1540,7 @@ function initApp() {
                                                 </div>
                                             </div>
                                         </div>
-                                    `).join('')}
+                                    `}).join('')}
                                 </div>
                             </div>
                         `).join('')}
