@@ -1,0 +1,38 @@
+{
+  "name": "Thermoduct - Docs Delete",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "thermoduct-docs-delete",
+        "options": {}
+      },
+      "id": "d0c5-0003-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-docs-delete"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst BASE_DIR = '/home/user/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = String(input.body?.project_id || input.project_id || '').replace(/[^a-zA-Z0-9_-]/g, '');\nconst subPath = String(input.body?.path || input.path || '').replace(/\\.\\./g, '').replace(/[^a-zA-Z0-9/_.-]/g, '_');\nconst fileName = String(input.body?.file || input.file || '').replace(/\\.\\./g, '').replace(/[\\/]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_');\n\nif (!projectId || !subPath || !fileName) {\n  throw new Error('project_id, path en file zijn verplicht.');\n}\n\nconst filePath = path.join(BASE_DIR, projectId, subPath, fileName);\n\ntry {\n  if (fs.existsSync(filePath)) {\n    fs.unlinkSync(filePath);\n    return [{ json: { success: true, message: `${fileName} verwijderd.` } }];\n  } else {\n    return [{ json: { success: false, message: 'Bestand niet gevonden.' } }];\n  }\n} catch (err) {\n  throw new Error(`Fout bij verwijderen: ${err.message}`);\n}"
+      },
+      "id": "d0c5-0003-4000-8000-000000000002",
+      "name": "Delete File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Delete File", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
