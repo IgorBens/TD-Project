@@ -49,7 +49,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Verplaats geüploade bestanden naar de doelmap\nconst setup = $('Setup').first().json;\nconst formData = $('Form Trigger').first();\nconst files = formData.binary || {};\nconst targetDir = setup.targetDir;\n\nconst commands = [];\nlet fileCount = 0;\n\nfor (const [key, fileInfo] of Object.entries(files)) {\n  if (fileInfo.fileName) {\n    commands.push({\n      fileName: fileInfo.fileName,\n      mimeType: fileInfo.mimeType,\n      key\n    });\n    fileCount++;\n  }\n}\n\nreturn [{ json: { targetDir, fileCount, files: commands } }];"
+        "jsCode": "// Splits elk geüpload bestand in een apart item met binary data\nconst setup = $('Setup').first().json;\nconst formItem = $('Form Trigger').first();\nconst binaries = formItem.binary || {};\nconst targetDir = setup.targetDir;\n\nconst items = [];\n\nfor (const [key, fileInfo] of Object.entries(binaries)) {\n  if (fileInfo.fileName) {\n    items.push({\n      json: { targetDir, fileName: fileInfo.fileName },\n      binary: { file: formItem.binary[key] }\n    });\n  }\n}\n\nif (items.length === 0) {\n  throw new Error('Geen bestanden gevonden in upload.');\n}\n\nreturn items;"
       },
       "id": "u1p2l3o4-0001-4000-8000-000000000004",
       "name": "Prep Files",
@@ -60,7 +60,8 @@
     {
       "parameters": {
         "operation": "write",
-        "fileName": "={{ $('Setup').first().json.targetDir + '/' + $binary.data?.fileName }}",
+        "fileName": "={{ $json.targetDir + '/' + $json.fileName }}",
+        "dataPropertyName": "file",
         "options": {}
       },
       "id": "u1p2l3o4-0001-4000-8000-000000000005",
