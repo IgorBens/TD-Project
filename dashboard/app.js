@@ -252,6 +252,7 @@ function initApp() {
                 body: JSON.stringify({
                     action: 'delete',
                     project_id: selectedProject.id,
+                    project_naam: selectedProject.naam || '',
                     odoo_ids: odooIds
                 })
             });

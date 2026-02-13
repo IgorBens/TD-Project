@@ -128,6 +128,49 @@
     },
     {
       "parameters": {
+        "jsCode": "// Bouw cleanup request met project info\nconst setup = $('Setup').first().json;\nconst webhookData = setup.input.body || setup.input;\nconst deleteResult = $input.first().json;\n\nreturn [{\n  json: {\n    deleteResult,\n    cleanupPayload: {\n      project_id: webhookData.project_id,\n      project_naam: webhookData.project_naam || ''\n    }\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000019",
+      "name": "Prep Cleanup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 140]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/thermoduct-cleanup",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cleanupPayload) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000020",
+      "name": "Trigger Cleanup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combineer delete + cleanup resultaat\nconst prepCleanup = $('Prep Cleanup').first().json;\nconst cleanupResult = $input.first().json;\n\nreturn [{\n  json: {\n    success: true,\n    action: 'delete',\n    deleted_ids: prepCleanup.deleteResult.deleted_ids,\n    cleanup: cleanupResult\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000021",
+      "name": "Combine Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 140]
+    },
+    {
+      "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
@@ -136,7 +179,7 @@
       "name": "Respond Delete",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1760, 140]
+      "position": [2420, 140]
     },
     {
       "parameters": {
@@ -292,6 +335,21 @@
       ]
     },
     "Delete Response": {
+      "main": [
+        [{ "node": "Prep Cleanup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Cleanup": {
+      "main": [
+        [{ "node": "Trigger Cleanup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Trigger Cleanup": {
+      "main": [
+        [{ "node": "Combine Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Combine Results": {
       "main": [
         [{ "node": "Respond Delete", "type": "main", "index": 0 }]
       ]
