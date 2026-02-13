@@ -6,7 +6,7 @@ const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
 const WEBHOOK_FOLDERS = WEBHOOK_BASE + '/thermoduct-folders';
 const WEBHOOK_FOLDER_DELETE = WEBHOOK_BASE + '/thermoduct-folder-delete';
 const WEBHOOK_FILES = WEBHOOK_BASE + '/thermoduct-files';
-const WEBHOOK_UPLOAD_FORM = 'http://46.225.76.46:5678/form/615f197c-5733-4bae-a032-4982ff10685b';
+const WEBHOOK_UPLOAD_FORM = 'http://46.225.76.46:5678/form/167e4b91-3b1d-4a63-ae82-be6f3a594d1f';
 
 // Odoo stage names (must match Odoo project stages)
 const STAGES = {
