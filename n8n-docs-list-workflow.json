@@ -6,7 +6,9 @@
         "httpMethod": "GET",
         "path": "thermoduct-docs-list",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "allowedOrigins": "*"
+        }
       },
       "id": "d0c5-0002-4000-8000-000000000001",
       "name": "Webhook",
@@ -27,7 +29,7 @@
     },
     {
       "parameters": {
-        "command": "ls -la --time-style=iso \"{{ $json.targetDir }}\" 2>/dev/null | tail -n +2 | awk '{if(NF>=8) print $5\"|\"$6\" \"$7\"|\"$8}'"
+        "command": "mkdir -p \"{{ $json.targetDir }}\" && ls -la --time-style=iso \"{{ $json.targetDir }}\" 2>/dev/null | tail -n +2 | awk '{if(NF>=8) print $5\"|\"$6\" \"$7\"|\"$8}' || true"
       },
       "id": "d0c5-0002-4000-8000-000000000003",
       "name": "List Directory",

@@ -5,7 +5,9 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "thermoduct-docs-delete",
-        "options": {}
+        "options": {
+          "allowedOrigins": "*"
+        }
       },
       "id": "d0c5-0003-4000-8000-000000000001",
       "name": "Webhook",

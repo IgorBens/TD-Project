@@ -6,7 +6,9 @@
         "httpMethod": "GET",
         "path": "thermoduct-docs-file",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "allowedOrigins": "*"
+        }
       },
       "id": "d0c5-0004-4000-8000-000000000001",
       "name": "Webhook",

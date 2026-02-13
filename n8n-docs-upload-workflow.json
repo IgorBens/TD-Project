@@ -5,7 +5,9 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "thermoduct-docs-upload",
-        "options": {}
+        "options": {
+          "allowedOrigins": "*"
+        }
       },
       "id": "d0c5-0001-4000-8000-000000000001",
       "name": "Webhook",
@@ -26,6 +28,16 @@
     },
     {
       "parameters": {
+        "command": "mkdir -p \"{{ $json.targetDir }}\""
+      },
+      "id": "d0c5-0001-4000-8000-000000000006",
+      "name": "Create Directory",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
         "operation": "write",
         "fileName": "={{ $json.fullPath }}",
         "dataPropertyName": "data",
@@ -35,7 +47,7 @@
       "name": "Write File",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [440, 300]
+      "position": [660, 300]
     },
     {
       "parameters": {
@@ -45,7 +57,7 @@
       "name": "Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 300]
+      "position": [880, 300]
     }
   ],
   "connections": {
@@ -55,6 +67,11 @@
       ]
     },
     "Prepare Paths": {
+      "main": [
+        [{ "node": "Create Directory", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Directory": {
       "main": [
         [{ "node": "Write File", "type": "main", "index": 0 }]
       ]
