@@ -1537,6 +1537,18 @@ function initApp() {
             container.innerHTML = `<p class="rv-empty">Kan servermappen niet laden: ${escapeHtml(err.message)}</p>`;
         }
     }
+
+    // Delegate click on file delete buttons
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.doc-file-delete');
+        if (!btn) return;
+        e.stopPropagation();
+        const folderPath = btn.dataset.folderPath;
+        const fileName = btn.dataset.fileName;
+        if (folderPath && fileName) {
+            deleteDocFile(folderPath, fileName, btn);
+        }
+    });
 }
 
 // ===== Lightbox =====
@@ -1585,18 +1597,6 @@ function initApp() {
         if (e.key === 'Escape') closeLightbox();
         if (e.key === 'ArrowLeft') navigate(-1);
         if (e.key === 'ArrowRight') navigate(1);
-    });
-
-    // Delegate click on file delete buttons
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.doc-file-delete');
-        if (!btn) return;
-        e.stopPropagation();
-        const folderPath = btn.dataset.folderPath;
-        const fileName = btn.dataset.fileName;
-        if (folderPath && fileName) {
-            deleteDocFile(folderPath, fileName, btn);
-        }
     });
 
     // Delegate click on image file items (lightbox)
