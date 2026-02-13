@@ -1262,9 +1262,37 @@ select:focus {
     font-size: 1.1rem;
 }
 
+.doc-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .doc-count {
     font-size: 0.8rem;
     color: #6c757d;
+}
+
+.doc-delete-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 2px 6px;
+    opacity: 0.4;
+    transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.doc-delete-btn:hover {
+    opacity: 1;
+    background: #fff5f5;
+    border-color: #e63946;
+}
+
+.doc-delete-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
 .doc-meta {

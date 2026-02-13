@@ -179,6 +179,7 @@ function initApp() {
     window.toggleDocCollector = toggleDocCollector;
     window.uploadDocFiles = uploadDocFiles;
     window.deleteDocFile = deleteDocFile;
+    window.deleteDocItem = deleteDocItem;
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -1353,6 +1354,92 @@ function initApp() {
         // TODO: implement with HTTP file server
     }
 
+    async function deleteDocItem(level, odooId, label, btnEl) {
+        if (!confirm(`${label} en alle onderliggende items verwijderen?`)) return;
+        if (!selectedProject?.id) return;
+
+        // Verzamel alle odoo_ids die verwijderd moeten worden
+        // Zoek het item en al zijn kinderen in de huidige data
+        const data = collectData();
+        const idsToDelete = [];
+
+        function collectIds(gebouwen) {
+            for (const g of gebouwen) {
+                if (level === 'gebouw' && String(g.odoo_id) === String(odooId)) {
+                    if (g.odoo_id) idsToDelete.push(parseInt(g.odoo_id));
+                    for (const v of g.verdiepen) {
+                        if (v.odoo_id) idsToDelete.push(parseInt(v.odoo_id));
+                        for (const c of v.collectoren) {
+                            if (c.odoo_id) idsToDelete.push(parseInt(c.odoo_id));
+                            for (const k of c.kringen) {
+                                if (k.odoo_id) idsToDelete.push(parseInt(k.odoo_id));
+                            }
+                        }
+                    }
+                    return;
+                }
+                for (const v of g.verdiepen) {
+                    if (level === 'verdiep' && String(v.odoo_id) === String(odooId)) {
+                        if (v.odoo_id) idsToDelete.push(parseInt(v.odoo_id));
+                        for (const c of v.collectoren) {
+                            if (c.odoo_id) idsToDelete.push(parseInt(c.odoo_id));
+                            for (const k of c.kringen) {
+                                if (k.odoo_id) idsToDelete.push(parseInt(k.odoo_id));
+                            }
+                        }
+                        return;
+                    }
+                    for (const c of v.collectoren) {
+                        if (level === 'collector' && String(c.odoo_id) === String(odooId)) {
+                            if (c.odoo_id) idsToDelete.push(parseInt(c.odoo_id));
+                            for (const k of c.kringen) {
+                                if (k.odoo_id) idsToDelete.push(parseInt(k.odoo_id));
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        collectIds(data.gebouwen);
+
+        if (idsToDelete.length === 0) {
+            showStatus('Geen Odoo IDs gevonden om te verwijderen.', 'error');
+            return;
+        }
+
+        // Disable knop tijdens verwijderen
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+
+        try {
+            await authFetch(WEBHOOK_SAVE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete',
+                    project_id: selectedProject.id,
+                    project_naam: selectedProject.naam || '',
+                    odoo_ids: idsToDelete
+                })
+            });
+
+            // Verwijder de corresponderende card uit de Invoer tab
+            const invoerCard = gebouwenContainer.querySelector(`.card[data-odoo-id="${odooId}"]`);
+            if (invoerCard) invoerCard.remove();
+
+            showStatus(`${label} verwijderd (${idsToDelete.length} item(s) uit Odoo).`, 'success');
+
+            // Herrender de Documenten tab
+            renderDocumenten();
+        } catch (err) {
+            showStatus(`Fout bij verwijderen: ${err.message}`, 'error');
+            btnEl.disabled = false;
+            btnEl.textContent = '\u{1F5D1}';
+        }
+    }
+
     function renderDocumenten() {
         const data = collectData();
         const container = document.getElementById('docContainer');
@@ -1387,7 +1474,10 @@ function initApp() {
                         <span class="badge badge-blok">Gebouw</span>
                         <strong>${escapeHtml(gebouw.naam || 'Naamloos')}</strong>
                     </div>
-                    <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
+                    <div class="doc-header-right">
+                        <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
+                        ${gebouw.odoo_id ? `<button class="doc-delete-btn" title="Gebouw verwijderen" onclick="event.stopPropagation(); deleteDocItem('gebouw', '${gebouw.odoo_id}', '${escapeHtml(gebouw.naam || '')}', this)">&#x1F5D1;</button>` : ''}
+                    </div>
                 </div>
                 <div class="doc-gebouw-body open">
                     ${gebouw.verdiepen.map(verdiep => `
@@ -1399,7 +1489,10 @@ function initApp() {
                                     <span class="badge badge-verdiep">Verdiep</span>
                                     <strong>${verdiep.nummer}</strong>
                                 </div>
-                                <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
+                                <div class="doc-header-right">
+                                    <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
+                                    ${verdiep.odoo_id ? `<button class="doc-delete-btn" title="Verdieping verwijderen" onclick="event.stopPropagation(); deleteDocItem('verdiep', '${verdiep.odoo_id}', 'Verdieping ${escapeHtml(String(verdiep.nummer))}', this)">&#x1F5D1;</button>` : ''}
+                                </div>
                             </div>
                             <div class="doc-verdiep-body open">
                                 ${verdiep.collectoren.map(col => {
@@ -1413,6 +1506,9 @@ function initApp() {
                                                     <span class="badge badge-collector">Col ${col.nummer}</span>
                                                     <strong>${escapeHtml(col.naam || '')}</strong>
                                                     <span class="doc-meta">${col.aantalKringen} kringen</span>
+                                                </div>
+                                                <div class="doc-header-right">
+                                                    ${col.odoo_id ? `<button class="doc-delete-btn" title="Collector verwijderen" onclick="event.stopPropagation(); deleteDocItem('collector', '${col.odoo_id}', 'Collector ${col.nummer}', this)">&#x1F5D1;</button>` : ''}
                                                 </div>
                                             </div>
                                             <div class="doc-collector-body">
