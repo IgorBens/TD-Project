@@ -16,19 +16,49 @@
     },
     {
       "parameters": {
-        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst BASE_DIR = '/home/user/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = String(input.body?.project_id || input.project_id || '').replace(/[^a-zA-Z0-9_-]/g, '');\nconst subPath = String(input.body?.path || input.path || '').replace(/\\.\\./g, '').replace(/[^a-zA-Z0-9/_.-]/g, '_');\nconst fileName = String(input.body?.file || input.file || '').replace(/\\.\\./g, '').replace(/[\\/]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_');\n\nif (!projectId || !subPath || !fileName) {\n  throw new Error('project_id, path en file zijn verplicht.');\n}\n\nconst filePath = path.join(BASE_DIR, projectId, subPath, fileName);\n\ntry {\n  if (fs.existsSync(filePath)) {\n    fs.unlinkSync(filePath);\n    return [{ json: { success: true, message: `${fileName} verwijderd.` } }];\n  } else {\n    return [{ json: { success: false, message: 'Bestand niet gevonden.' } }];\n  }\n} catch (err) {\n  throw new Error(`Fout bij verwijderen: ${err.message}`);\n}"
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst projectId = String(body.project_id || '').replace(/[^a-zA-Z0-9_-]/g, '');\nconst subPath = String(body.path || '').replace(/\\.\\./g, '').replace(/^\\//,'');\nconst fileName = String(body.file || '').replace(/\\.\\./g, '').replace(/[\\/]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_');\n\nif (!projectId || !subPath || !fileName) {\n  throw new Error('project_id, path en file zijn verplicht.');\n}\n\nconst basePath = '/home/node/n8n-files/projects';\nconst fullPath = `${basePath}/${projectId}/${subPath}/${fileName}`;\n\nreturn [{ json: { fullPath, fileName } }];"
       },
       "id": "d0c5-0003-4000-8000-000000000002",
-      "name": "Delete File",
+      "name": "Build Path",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "command": "rm -f \"{{ $json.fullPath }}\" && echo 'OK' || echo 'FAIL'"
+      },
+      "id": "d0c5-0003-4000-8000-000000000003",
+      "name": "Delete File",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst fileName = $('Build Path').first().json.fileName;\nconst success = (result.stdout || '').trim() === 'OK';\n\nreturn [{\n  json: {\n    success,\n    message: success ? `${fileName} verwijderd.` : 'Fout bij verwijderen.'\n  }\n}];"
+      },
+      "id": "d0c5-0003-4000-8000-000000000004",
+      "name": "Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
     }
   ],
   "connections": {
     "Webhook": {
       "main": [
+        [{ "node": "Build Path", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Path": {
+      "main": [
         [{ "node": "Delete File", "type": "main", "index": 0 }]
+      ]
+    },
+    "Delete File": {
+      "main": [
+        [{ "node": "Response", "type": "main", "index": 0 }]
       ]
     }
   },

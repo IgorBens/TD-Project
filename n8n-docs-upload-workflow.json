@@ -5,9 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "thermoduct-docs-upload",
-        "options": {
-          "rawBody": false
-        }
+        "options": {}
       },
       "id": "d0c5-0001-4000-8000-000000000001",
       "name": "Webhook",
@@ -18,19 +16,52 @@
     },
     {
       "parameters": {
-        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\n// ============================================\n// Configuratie — pas dit pad aan!\n// ============================================\nconst BASE_DIR = '/home/user/n8n-files/projects';\n\nconst input = $input.first();\nconst body = input.json.body || input.json;\nconst projectId = String(body.project_id || '').replace(/[^a-zA-Z0-9_-]/g, '');\nconst subPath = String(body.path || '').replace(/\\.\\./g, '').replace(/[^a-zA-Z0-9/_.-]/g, '_');\n\nif (!projectId || !subPath) {\n  throw new Error('project_id en path zijn verplicht.');\n}\n\nconst targetDir = path.join(BASE_DIR, projectId, subPath);\n\n// Maak directory aan als die niet bestaat\nfs.mkdirSync(targetDir, { recursive: true });\n\n// Verwerk binaire bestanden\nconst binaryKeys = Object.keys(input.binary || {});\nconst savedFiles = [];\n\nfor (const key of binaryKeys) {\n  const binaryData = input.binary[key];\n  const fileName = binaryData.fileName || `upload_${Date.now()}.jpg`;\n  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');\n  const filePath = path.join(targetDir, safeName);\n\n  // Haal binary data op via n8n helper\n  const buffer = await this.helpers.getBinaryDataBuffer(0, key);\n  fs.writeFileSync(filePath, buffer);\n  savedFiles.push({ name: safeName, path: filePath });\n}\n\nreturn [{\n  json: {\n    success: true,\n    message: `${savedFiles.length} bestand(en) opgeslagen.`,\n    files: savedFiles.map(f => f.name)\n  }\n}];"
+        "jsCode": "const input = $input.first();\nconst body = input.json.body || input.json;\nconst projectId = String(body.project_id || '').replace(/[^a-zA-Z0-9_-]/g, '');\nconst subPath = String(body.path || '').replace(/\\.\\./g, '').replace(/^\\//,'');\n\nif (!projectId || !subPath) {\n  throw new Error('project_id en path zijn verplicht.');\n}\n\nconst basePath = '/home/node/n8n-files/projects';\nconst targetDir = `${basePath}/${projectId}/${subPath}`;\n\n// Geef binary data door met het doelpad\nconst binaryKeys = Object.keys(input.binary || {});\nconst items = [];\n\nfor (const key of binaryKeys) {\n  const binaryData = input.binary[key];\n  const fileName = (binaryData.fileName || `upload_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');\n  \n  items.push({\n    json: {\n      targetDir,\n      fileName,\n      fullPath: `${targetDir}/${fileName}`\n    },\n    binary: {\n      data: input.binary[key]\n    }\n  });\n}\n\nif (items.length === 0) {\n  throw new Error('Geen bestanden ontvangen.');\n}\n\nreturn items;"
       },
       "id": "d0c5-0001-4000-8000-000000000002",
-      "name": "Save Files",
+      "name": "Prepare Paths",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.fullPath }}",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "d0c5-0001-4000-8000-000000000003",
+      "name": "Write File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst saved = items.map(i => i.json.fileName || 'unknown');\nreturn [{\n  json: {\n    success: true,\n    message: `${saved.length} bestand(en) opgeslagen.`,\n    files: saved\n  }\n}];"
+      },
+      "id": "d0c5-0001-4000-8000-000000000004",
+      "name": "Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
     }
   ],
   "connections": {
     "Webhook": {
       "main": [
-        [{ "node": "Save Files", "type": "main", "index": 0 }]
+        [{ "node": "Prepare Paths", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Paths": {
+      "main": [
+        [{ "node": "Write File", "type": "main", "index": 0 }]
+      ]
+    },
+    "Write File": {
+      "main": [
+        [{ "node": "Response", "type": "main", "index": 0 }]
       ]
     }
   },
