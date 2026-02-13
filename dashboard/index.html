@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/dashboard/">
     <title>Thermoduct Dashboard</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -52,8 +53,68 @@
 
         <!-- Tabs -->
         <div class="tabs">
+            <button type="button" class="tab" data-tab="verkoopsorder">Verkoopsorder</button>
             <button type="button" class="tab active" data-tab="invoer">Invoer</button>
             <button type="button" class="tab" data-tab="rolverdeling">Rolverdeling</button>
+            <button type="button" class="tab" data-tab="vordering">Vordering</button>
+            <button type="button" class="tab" data-tab="documenten">Documenten</button>
+        </div>
+
+        <!-- Tab: Verkoopsorder -->
+        <div class="tab-content" id="tab-verkoopsorder">
+            <div class="vo-layout">
+                <!-- Materialen sectie -->
+                <div class="vo-section">
+                    <div class="vo-section-header">
+                        <h3>Materialen</h3>
+                        <span class="vo-section-badge" id="voMaterialenCount">0 items</span>
+                    </div>
+                    <div class="vo-section-body">
+                        <table class="vo-tabel" id="voMaterialenTabel">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Omschrijving</th>
+                                    <th>Aantal</th>
+                                    <th>Eenheid</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="vo-empty-row">
+                                    <td colspan="5">Laad een project om materialen te zien</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Offertes sectie -->
+                <div class="vo-section">
+                    <div class="vo-section-header">
+                        <h3>Offertes</h3>
+                        <span class="vo-section-badge" id="voOffertesCount">0 offertes</span>
+                    </div>
+                    <div class="vo-section-body">
+                        <table class="vo-tabel" id="voOffertesTabel">
+                            <thead>
+                                <tr>
+                                    <th>Referentie</th>
+                                    <th>Datum</th>
+                                    <th>Klant</th>
+                                    <th>Bedrag</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="vo-empty-row">
+                                    <td colspan="5">Laad een project om offertes te zien</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Tab: Invoer -->
@@ -75,19 +136,34 @@
         <div class="tab-content" id="tab-rolverdeling">
             <div class="rv-layout">
                 <div class="rv-main">
-                    <div class="rv-rollen-config">
-                        <h3>Beschikbare rollen</h3>
-                        <div class="rv-rollen-lijst" id="rvRollenLijst"></div>
-                        <div class="rv-rol-toevoegen">
-                            <select id="rvRolGrootte">
-                                <option value="600">600 m</option>
-                                <option value="240">240 m</option>
-                                <option value="200">200 m</option>
-                                <option value="120">120 m</option>
-                                <option value="100">100 m</option>
-                            </select>
-                            <input type="number" id="rvRolAantal" value="1" min="1" placeholder="Aantal">
-                            <button type="button" class="btn btn-add" id="btnAddRol">+ Rol</button>
+                    <!-- Locked sessions -->
+                    <div id="rvSessionsContainer"></div>
+
+                    <!-- Lock bar -->
+                    <div class="rv-lock-bar">
+                        <button type="button" class="btn btn-lock" id="btnLockRolverdeling">
+                            <span class="lock-icon">&#x1F512;</span> Vastzetten &amp; nieuwe sessie
+                        </button>
+                    </div>
+
+                    <div class="rv-rollen-config" id="rvRollenConfig">
+                        <div class="rv-rollen-config-header" onclick="toggleRollenConfig(this)">
+                            <h3>Beschikbare rollen</h3>
+                            <span class="chevron open">&#9654;</span>
+                        </div>
+                        <div class="rv-rollen-config-body open" id="rvRollenConfigBody">
+                            <div class="rv-rollen-lijst" id="rvRollenLijst"></div>
+                            <div class="rv-rol-toevoegen">
+                                <select id="rvRolGrootte">
+                                    <option value="600">600 m</option>
+                                    <option value="240">240 m</option>
+                                    <option value="200">200 m</option>
+                                    <option value="120">120 m</option>
+                                    <option value="100">100 m</option>
+                                </select>
+                                <input type="number" id="rvRolAantal" value="1" min="1" placeholder="Aantal">
+                                <button type="button" class="btn btn-add" id="btnAddRol">+ Rol</button>
+                            </div>
                         </div>
                     </div>
 
@@ -97,6 +173,28 @@
                 <div class="rv-sidebar">
                     <div class="rv-stats" id="rvStats"></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Tab: Vordering -->
+        <div class="tab-content" id="tab-vordering">
+            <div class="vd-toolbar">
+                <label class="vd-select-all-label">
+                    <input type="checkbox" id="vdSelectAll"> Alles selecteren
+                </label>
+                <span class="vd-selected-count" id="vdSelectedCount">0 geselecteerd</span>
+            </div>
+            <div id="vdContainer" class="vd-container">
+                <p class="rv-empty">Laad een project en vul de invoer tab in om de vordering te bekijken.</p>
+            </div>
+        </div>
+        <!-- Tab: Documenten -->
+        <div class="tab-content" id="tab-documenten">
+            <div class="doc-status-bar" id="docStatusBar">
+                <span class="doc-status-text" id="docStatusText">Laad een project om documenten te beheren.</span>
+            </div>
+            <div id="docContainer" class="doc-container">
+                <p class="rv-empty">Laad een project en vul de invoer tab in om de documentenstructuur te zien.</p>
             </div>
         </div>
     </div>

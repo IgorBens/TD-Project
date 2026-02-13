@@ -3,6 +3,10 @@ const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
+const WEBHOOK_DOCS_UPLOAD = WEBHOOK_BASE + '/thermoduct-docs-upload';
+const WEBHOOK_DOCS_LIST = WEBHOOK_BASE + '/thermoduct-docs-list';
+const WEBHOOK_DOCS_DELETE = WEBHOOK_BASE + '/thermoduct-docs-delete';
+const WEBHOOK_DOCS_FILE = WEBHOOK_BASE + '/thermoduct-docs-file';
 
 // Odoo stage names (must match Odoo project stages)
 const STAGES = {
@@ -22,6 +26,11 @@ let rollen = [];
 let rolCounter = 0;
 let selectedProject = null;
 let appInitialized = false;
+
+// Rolverdeling sessions: array of locked sessions
+// Each session: { rollen: [...], toewijzingen: { kringCode: rolId }, locked: true }
+let rvSessions = [];   // Locked (previous) sessions
+let currentRollen = []; // Current (active) session rollen
 
 const loginOverlay = document.getElementById('loginOverlay');
 const appContainer = document.getElementById('appContainer');
@@ -162,6 +171,16 @@ function initApp() {
     window.addCollector = addCollector;
     window.removeRol = removeRol;
     window.assignRolToKring = assignRolToKring;
+    window.toggleRollenConfig = toggleRollenConfig;
+    window.toggleVdGebouw = toggleVdGebouw;
+    window.toggleVdVerdiep = toggleVdVerdiep;
+    window.toggleVdCollector = toggleVdCollector;
+    window.toggleVdKring = toggleVdKring;
+    window.toggleDocGebouw = toggleDocGebouw;
+    window.toggleDocVerdiep = toggleDocVerdiep;
+    window.toggleDocCollector = toggleDocCollector;
+    window.uploadDocFiles = uploadDocFiles;
+    window.deleteDocFile = deleteDocFile;
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -173,6 +192,12 @@ function initApp() {
 
             if (tab.dataset.tab === 'rolverdeling') {
                 renderRolverdeling();
+            }
+            if (tab.dataset.tab === 'vordering') {
+                renderVordering();
+            }
+            if (tab.dataset.tab === 'documenten') {
+                renderDocumenten();
             }
         });
     });
@@ -757,13 +782,15 @@ function initApp() {
         const aantal = parseInt(document.getElementById('rvRolAantal').value) || 1;
         for (let i = 0; i < aantal; i++) {
             rolCounter++;
-            rollen.push({ id: 'rol_' + rolCounter, grootte, restant: grootte, toewijzingen: [] });
+            currentRollen.push({ id: 'rol_' + rolCounter, grootte, restant: grootte, toewijzingen: [] });
         }
+        rollen = currentRollen; // Keep legacy reference in sync
         renderRolverdeling();
     }
 
     function removeRol(rolId) {
-        rollen = rollen.filter(r => r.id !== rolId);
+        currentRollen = currentRollen.filter(r => r.id !== rolId);
+        rollen = currentRollen;
         renderRolverdeling();
     }
     window.removeRol = removeRol;
@@ -774,6 +801,8 @@ function initApp() {
         data.gebouwen.forEach(gebouw => {
             gebouw.verdiepen.forEach(verdiep => {
                 verdiep.collectoren.forEach(collector => {
+                    // Unique code: gebouw-verdiep-collector.kring
+                    const prefix = `${gebouw.naam || 'G'}_${verdiep.nummer}_C${collector.nummer}`;
                     result.push({
                         label: collector.naam || `Collector ${collector.nummer}`,
                         gebouw: gebouw.naam,
@@ -782,8 +811,10 @@ function initApp() {
                         druk: collector.druk,
                         randisolatie: collector.randisolatie,
                         uitzetvoegen: collector.uitzetvoegen,
+                        uniqueKey: prefix,
                         kringen: collector.kringen.map(k => ({
-                            code: `${collector.nummer}.${k.nummer}`,
+                            code: `${prefix}.K${k.nummer}`,
+                            displayCode: `${collector.nummer}.${k.nummer}`,
                             nummer: k.nummer,
                             systeem: k.systeem,
                             lengte: k.lengte,
@@ -797,13 +828,50 @@ function initApp() {
         return result;
     }
 
+    // Get all assigned kring codes across ALL sessions (locked + current)
+    function getAllAssignedKringCodes() {
+        const codes = new Set();
+        // From locked sessions
+        rvSessions.forEach(session => {
+            session.rollen.forEach(r => {
+                r.toewijzingen.forEach(t => codes.add(t.code));
+            });
+        });
+        // From current session
+        currentRollen.forEach(r => {
+            r.toewijzingen.forEach(t => codes.add(t.code));
+        });
+        return codes;
+    }
+
+    // Get collectors that have unassigned kringen (for current active session)
+    function getUnassignedCollectoren() {
+        const allCollectoren = flattenCollectoren();
+        const assignedCodes = new Set();
+
+        // Collect codes from locked sessions only
+        rvSessions.forEach(session => {
+            session.rollen.forEach(r => {
+                r.toewijzingen.forEach(t => assignedCodes.add(t.code));
+            });
+        });
+
+        // Filter: only show collectors that have at least one unassigned kring
+        return allCollectoren.map(col => {
+            const unassignedKringen = col.kringen.filter(k => !assignedCodes.has(k.code));
+            if (unassignedKringen.length === 0) return null;
+            return { ...col, kringen: unassignedKringen };
+        }).filter(Boolean);
+    }
+
     function assignRolToKring(rolId, collectorIdx, kringIdx) {
-        const collectoren = flattenCollectoren();
+        const collectoren = getUnassignedCollectoren();
         const kring = collectoren[collectorIdx]?.kringen[kringIdx];
         if (!kring) return;
 
         const kringCode = kring.code;
-        rollen.forEach(r => {
+        // Remove existing assignment from current session
+        currentRollen.forEach(r => {
             const existingIdx = r.toewijzingen.findIndex(t => t.code === kringCode);
             if (existingIdx !== -1) {
                 r.restant += r.toewijzingen[existingIdx].lengte;
@@ -812,31 +880,86 @@ function initApp() {
         });
 
         if (rolId !== 'none') {
-            const rol = rollen.find(r => r.id === rolId);
+            const rol = currentRollen.find(r => r.id === rolId);
             if (rol) {
                 rol.restant -= kring.lengte;
                 rol.toewijzingen.push({ code: kringCode, lengte: kring.lengte });
             }
         }
+        rollen = currentRollen;
         renderRolverdeling();
     }
     window.assignRolToKring = assignRolToKring;
 
-    function getAssignedRol(kringCode) {
-        for (const rol of rollen) {
+    function getAssignedRolInCurrentSession(kringCode) {
+        for (const rol of currentRollen) {
             if (rol.toewijzingen.find(t => t.code === kringCode)) return rol;
         }
         return null;
     }
 
     function renderRolverdeling() {
-        const collectoren = flattenCollectoren();
+        // Use only unassigned collectors (not locked ones)
+        const collectoren = getUnassignedCollectoren();
 
+        // Render locked sessions
+        const sessionsContainer = document.getElementById('rvSessionsContainer');
+        if (sessionsContainer) {
+            if (rvSessions.length === 0) {
+                sessionsContainer.innerHTML = '';
+            } else {
+                sessionsContainer.innerHTML = rvSessions.map((session, sIdx) => {
+                    const totaalRollen = session.rollen.length;
+                    const totaalKringen = session.rollen.reduce((s, r) => s + r.toewijzingen.length, 0);
+                    const totaalM = session.rollen.reduce((s, r) => s + r.grootte, 0);
+                    return `
+                        <div class="rv-session-locked">
+                            <div class="rv-session-header" onclick="toggleLockedSession(${sIdx})">
+                                <div class="rv-session-title">
+                                    <span class="lock-icon">&#x1F512;</span>
+                                    <strong>Sessie ${sIdx + 1}</strong>
+                                    <span class="rv-session-summary">${totaalRollen} rollen &middot; ${totaalKringen} kringen &middot; ${totaalM}m</span>
+                                </div>
+                                <div class="rv-session-actions">
+                                    <button type="button" class="btn btn-remove" onclick="event.stopPropagation(); unlockSession(${sIdx})" title="Ontgrendelen">&#x1F513;</button>
+                                    <span class="chevron">&#9654;</span>
+                                </div>
+                            </div>
+                            <div class="rv-session-body" id="rvSessionBody-${sIdx}">
+                                ${session.rollen.map(rol => {
+                                    const kleur = rolKleuren[rol.grootte] || '#868e96';
+                                    const gebruikt = rol.grootte - rol.restant;
+                                    return `
+                                        <div class="rv-rol-item">
+                                            <div class="rv-rol-info">
+                                                <span class="rv-rol-badge" style="background:${kleur}">${rol.grootte}m</span>
+                                                <span class="rv-rol-detail">${gebruikt}m gebruikt / ${rol.restant}m rest</span>
+                                            </div>
+                                            <div class="rv-rol-bar">
+                                                <div class="rv-rol-bar-fill" style="width:${(gebruikt / rol.grootte) * 100}%;background:${kleur}"></div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                                <div class="rv-session-kringen">
+                                    ${session.rollen.flatMap(rol => rol.toewijzingen.map(t => {
+                                        const kleur = rolKleuren[rol.grootte] || '#868e96';
+                                        return `<span class="rv-session-kring-tag" style="border-color:${kleur}"><span class="rv-assign-dot" style="background:${kleur}"></span> ${t.code.split('.').pop()} (${t.lengte}m)</span>`;
+                                    })).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // Render current session rollen
         const rollenLijst = document.getElementById('rvRollenLijst');
-        if (rollen.length === 0) {
+        if (currentRollen.length === 0) {
             rollenLijst.innerHTML = '<p class="rv-empty">Nog geen rollen toegevoegd.</p>';
         } else {
-            rollenLijst.innerHTML = rollen.map(rol => {
+            rollenLijst.innerHTML = currentRollen.map(rol => {
                 const kleur = rolKleuren[rol.grootte] || '#868e96';
                 const gebruikt = rol.grootte - rol.restant;
                 const pct = (gebruikt / rol.grootte) * 100;
@@ -855,9 +978,15 @@ function initApp() {
             }).join('');
         }
 
+        // Render collector cards for unassigned collectors
         const overzicht = document.getElementById('rvCollectorenOverzicht');
         if (collectoren.length === 0) {
-            overzicht.innerHTML = '<p class="rv-empty">Geen collectoren gevonden. Vul eerst de invoer tab in.</p>';
+            const allCollectoren = flattenCollectoren();
+            if (allCollectoren.length === 0) {
+                overzicht.innerHTML = '<p class="rv-empty">Geen collectoren gevonden. Vul eerst de invoer tab in.</p>';
+            } else {
+                overzicht.innerHTML = '<p class="rv-empty" style="color:#2d6a4f; font-style:normal;">Alle kringen zijn toegewezen in vorige sessies.</p>';
+            }
         } else {
             overzicht.innerHTML = collectoren.map((col, cIdx) => {
                 const totaalLengte = col.kringen.reduce((s, k) => s + k.lengte, 0);
@@ -883,11 +1012,11 @@ function initApp() {
                             </thead>
                             <tbody>
                                 ${col.kringen.map((k, kIdx) => {
-                                    const assignedRol = getAssignedRol(k.code);
+                                    const assignedRol = getAssignedRolInCurrentSession(k.code);
                                     const assignedKleur = assignedRol ? (rolKleuren[assignedRol.grootte] || '#868e96') : 'transparent';
                                     return `
                                         <tr>
-                                            <td><strong>${k.code}</strong></td>
+                                            <td><strong>${k.displayCode}</strong></td>
                                             <td>${k.legpatroon || '-'}</td>
                                             <td>${k.lengte || '-'}</td>
                                             <td>${k.m2 || '-'}</td>
@@ -896,7 +1025,7 @@ function initApp() {
                                                     ${assignedRol ? `<span class="rv-assign-dot" style="background:${assignedKleur}"></span>` : ''}
                                                     <select onchange="assignRolToKring(this.value, ${cIdx}, ${kIdx})">
                                                         <option value="none">-- Geen --</option>
-                                                        ${rollen.map(r => {
+                                                        ${currentRollen.map(r => {
                                                             const sel = assignedRol && assignedRol.id === r.id ? 'selected' : '';
                                                             return `<option value="${r.id}" ${sel}>${r.grootte}m (rest: ${r.restant}m)</option>`;
                                                         }).join('')}
@@ -918,33 +1047,466 @@ function initApp() {
 
     function renderStats(collectoren) {
         const statsEl = document.getElementById('rvStats');
+        // Stats for current session
         const totaalCollectoren = collectoren.length;
         const totaalKringen = collectoren.reduce((s, c) => s + c.kringen.length, 0);
         const totaalMBuisKringen = collectoren.reduce((s, c) => s + c.kringen.reduce((s2, k) => s2 + k.lengte, 0), 0);
-        const totaalMBuisRollen = rollen.reduce((s, r) => s + r.grootte, 0);
+        const totaalMBuisRollen = currentRollen.reduce((s, r) => s + r.grootte, 0);
         const totaalVerlies = totaalMBuisRollen - totaalMBuisKringen;
         const alleLengtes = collectoren.flatMap(c => c.kringen.map(k => k.lengte)).filter(l => l > 0);
         const grootsteKring = alleLengtes.length ? Math.max(...alleLengtes) : 0;
         const kleinsteKring = alleLengtes.length ? Math.min(...alleLengtes) : 0;
         const gemiddeldeKring = alleLengtes.length ? (alleLengtes.reduce((s, l) => s + l, 0) / alleLengtes.length) : 0;
 
+        // Global stats
+        const allRollen = [...rvSessions.flatMap(s => s.rollen), ...currentRollen];
+        const totaalAlleRollen = allRollen.reduce((s, r) => s + r.grootte, 0);
+        const totaalAlleKringenM = flattenCollectoren().reduce((s, c) => s + c.kringen.reduce((s2, k) => s2 + k.lengte, 0), 0);
+
         statsEl.innerHTML = `
-            <h3>Statistieken</h3>
-            <div class="rv-stat-row"><span>Totaal collectoren</span><strong>${totaalCollectoren}</strong></div>
-            <div class="rv-stat-row"><span>Totaal kringen</span><strong>${totaalKringen}</strong></div>
+            <h3>Huidige sessie</h3>
+            <div class="rv-stat-row"><span>Collectoren</span><strong>${totaalCollectoren}</strong></div>
+            <div class="rv-stat-row"><span>Kringen</span><strong>${totaalKringen}</strong></div>
             <hr>
-            <div class="rv-stat-row"><span>Totaal m buis (kringen)</span><strong>${totaalMBuisKringen.toFixed(1)} m</strong></div>
-            <div class="rv-stat-row"><span>Totaal m buis (rollen)</span><strong>${totaalMBuisRollen} m</strong></div>
+            <div class="rv-stat-row"><span>m buis (kringen)</span><strong>${totaalMBuisKringen.toFixed(1)} m</strong></div>
+            <div class="rv-stat-row"><span>m buis (rollen)</span><strong>${totaalMBuisRollen} m</strong></div>
             <div class="rv-stat-row ${totaalVerlies < 0 ? 'rv-stat-warning' : ''}">
-                <span>${totaalVerlies < 0 ? 'Te weinig rollen' : 'Rest / verlies'}</span>
+                <span>${totaalVerlies < 0 ? 'Te weinig' : 'Rest / verlies'}</span>
                 <strong>${Math.abs(totaalVerlies).toFixed(1)} m</strong>
             </div>
-            <div class="rv-stat-row"><span>Totaal rollen</span><strong>${rollen.length}</strong></div>
+            <div class="rv-stat-row"><span>Rollen</span><strong>${currentRollen.length}</strong></div>
             <hr>
             <div class="rv-stat-row"><span>Grootste kring</span><strong>${grootsteKring.toFixed(1)} m</strong></div>
             <div class="rv-stat-row"><span>Kleinste kring</span><strong>${kleinsteKring.toFixed(1)} m</strong></div>
-            <div class="rv-stat-row"><span>Gemiddelde kring</span><strong>${gemiddeldeKring.toFixed(1)} m</strong></div>
+            <div class="rv-stat-row"><span>Gemiddelde</span><strong>${gemiddeldeKring.toFixed(1)} m</strong></div>
+            ${rvSessions.length > 0 ? `
+                <hr>
+                <h3>Totaal (alle sessies)</h3>
+                <div class="rv-stat-row"><span>Sessies</span><strong>${rvSessions.length + 1}</strong></div>
+                <div class="rv-stat-row"><span>Totaal rollen</span><strong>${allRollen.length}</strong></div>
+                <div class="rv-stat-row"><span>Totaal m buis</span><strong>${totaalAlleRollen} m</strong></div>
+            ` : ''}
         `;
+    }
+
+    // =============================================
+    // ===== ROLVERDELING LOCK/COLLAPSE =====
+    // =============================================
+
+    function toggleRollenConfig(headerEl) {
+        const body = document.getElementById('rvRollenConfigBody');
+        const chevron = headerEl.querySelector('.chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+    }
+
+    function toggleLockedSession(sIdx) {
+        const body = document.getElementById('rvSessionBody-' + sIdx);
+        const header = body.previousElementSibling;
+        const chevron = header.querySelector('.chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+    }
+    window.toggleLockedSession = toggleLockedSession;
+
+    function unlockSession(sIdx) {
+        if (!confirm('Sessie ontgrendelen? De huidige actieve rollen worden samengevoegd.')) return;
+        const session = rvSessions.splice(sIdx, 1)[0];
+        // Merge session rollen into current
+        currentRollen = [...session.rollen, ...currentRollen];
+        rollen = currentRollen;
+        renderRolverdeling();
+    }
+    window.unlockSession = unlockSession;
+
+    const btnLock = document.getElementById('btnLockRolverdeling');
+    btnLock.addEventListener('click', () => {
+        // Check if there's anything to lock
+        const hasAssignments = currentRollen.some(r => r.toewijzingen.length > 0);
+        if (!hasAssignments && currentRollen.length === 0) {
+            return; // Nothing to lock
+        }
+
+        if (!confirm('Huidige rolverdeling vastzetten? U start dan een nieuwe sessie voor de overige kringen.')) return;
+
+        // Save current session as locked
+        rvSessions.push({
+            rollen: JSON.parse(JSON.stringify(currentRollen))
+        });
+
+        // Start fresh session
+        currentRollen = [];
+        rollen = currentRollen;
+
+        renderRolverdeling();
+    });
+
+    // =============================================
+    // ===== VORDERING TAB =====
+    // =============================================
+
+    const vdSelectAll = document.getElementById('vdSelectAll');
+    vdSelectAll.addEventListener('change', () => {
+        document.querySelectorAll('#vdContainer .vd-checkbox').forEach(cb => {
+            cb.checked = vdSelectAll.checked;
+        });
+        updateVdCount();
+    });
+
+    function toggleVdGebouw(cb) {
+        const gebouwEl = cb.closest('.vd-gebouw');
+        gebouwEl.querySelectorAll('.vd-checkbox').forEach(c => { c.checked = cb.checked; });
+        updateVdCount();
+    }
+
+    function toggleVdVerdiep(cb) {
+        const verdiepEl = cb.closest('.vd-verdiep');
+        verdiepEl.querySelectorAll('.vd-checkbox').forEach(c => { c.checked = cb.checked; });
+        // Update parent gebouw state
+        updateParentCheckbox(verdiepEl.closest('.vd-gebouw'));
+        updateVdCount();
+    }
+
+    function toggleVdCollector(cb) {
+        const collectorEl = cb.closest('.vd-collector');
+        collectorEl.querySelectorAll('.vd-checkbox').forEach(c => { c.checked = cb.checked; });
+        // Update parents
+        updateParentCheckbox(collectorEl.closest('.vd-verdiep'));
+        updateParentCheckbox(collectorEl.closest('.vd-gebouw'));
+        updateVdCount();
+    }
+
+    function toggleVdKring(cb) {
+        // Update parents
+        updateParentCheckbox(cb.closest('.vd-collector'));
+        updateParentCheckbox(cb.closest('.vd-verdiep'));
+        updateParentCheckbox(cb.closest('.vd-gebouw'));
+        updateVdCount();
+    }
+
+    function updateParentCheckbox(parentEl) {
+        if (!parentEl) return;
+        const parentCb = parentEl.querySelector(':scope > .vd-item-header .vd-checkbox');
+        if (!parentCb) return;
+        const children = parentEl.querySelectorAll('.vd-children .vd-checkbox');
+        const allChecked = [...children].every(c => c.checked);
+        const someChecked = [...children].some(c => c.checked);
+        parentCb.checked = allChecked;
+        parentCb.indeterminate = !allChecked && someChecked;
+    }
+
+    function updateVdCount() {
+        const allKringen = document.querySelectorAll('#vdContainer .vd-kring .vd-checkbox');
+        const checked = [...allKringen].filter(c => c.checked).length;
+        document.getElementById('vdSelectedCount').textContent = `${checked} geselecteerd`;
+    }
+
+    function renderVordering() {
+        const data = collectData();
+        const container = document.getElementById('vdContainer');
+
+        if (!data.gebouwen || data.gebouwen.length === 0) {
+            container.innerHTML = '<p class="rv-empty">Laad een project en vul de invoer tab in om de vordering te bekijken.</p>';
+            return;
+        }
+
+        container.innerHTML = data.gebouwen.map(gebouw => `
+            <div class="vd-gebouw">
+                <div class="vd-item-header vd-level-gebouw">
+                    <label>
+                        <input type="checkbox" class="vd-checkbox" onchange="toggleVdGebouw(this)">
+                        <span class="badge badge-blok">Gebouw</span>
+                        <strong>${escapeHtml(gebouw.naam || 'Naamloos')}</strong>
+                    </label>
+                </div>
+                <div class="vd-children">
+                    ${gebouw.verdiepen.map(verdiep => `
+                        <div class="vd-verdiep">
+                            <div class="vd-item-header vd-level-verdiep">
+                                <label>
+                                    <input type="checkbox" class="vd-checkbox" onchange="toggleVdVerdiep(this)">
+                                    <span class="badge badge-verdiep">Verdiep</span>
+                                    <strong>${verdiep.nummer}</strong>
+                                </label>
+                            </div>
+                            <div class="vd-children">
+                                ${verdiep.collectoren.map(col => `
+                                    <div class="vd-collector">
+                                        <div class="vd-item-header vd-level-collector">
+                                            <label>
+                                                <input type="checkbox" class="vd-checkbox" onchange="toggleVdCollector(this)">
+                                                <span class="badge badge-collector">Col ${col.nummer}</span>
+                                                <strong>${escapeHtml(col.naam || '')}</strong>
+                                                <span class="vd-meta">${col.druk} bar &middot; ${col.aantalKringen} kringen</span>
+                                            </label>
+                                        </div>
+                                        <div class="vd-children vd-kringen-grid">
+                                            ${col.kringen.map(k => `
+                                                <div class="vd-kring">
+                                                    <label>
+                                                        <input type="checkbox" class="vd-checkbox" onchange="toggleVdKring(this)">
+                                                        <span class="vd-kring-info">
+                                                            <span class="vd-kring-nr">K${k.nummer}</span>
+                                                            <span class="vd-kring-detail">${k.lengte}m &middot; ${k.m2}m&sup2;</span>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+
+        updateVdCount();
+    }
+
+    // =============================================
+    // ===== DOCUMENTEN TAB =====
+    // =============================================
+
+    // Cache of loaded files per collector path
+    const docCache = {};
+
+    function getDocPath(gebouwNaam, verdiepNr, collectorNr) {
+        // Sanitize names for path use
+        const safe = str => String(str).replace(/[^a-zA-Z0-9._-]/g, '_');
+        return `${safe(gebouwNaam)}/${safe(verdiepNr)}/Collector_${safe(collectorNr)}`;
+    }
+
+    function toggleDocGebouw(headerEl) {
+        const body = headerEl.nextElementSibling;
+        const chevron = headerEl.querySelector('.doc-chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+    }
+
+    function toggleDocVerdiep(headerEl) {
+        const body = headerEl.nextElementSibling;
+        const chevron = headerEl.querySelector('.doc-chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+    }
+
+    function toggleDocCollector(headerEl) {
+        const body = headerEl.nextElementSibling;
+        const chevron = headerEl.querySelector('.doc-chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+
+        // Load files when opening
+        if (body.classList.contains('open')) {
+            const path = headerEl.dataset.docPath;
+            if (path && !docCache[path]) {
+                loadDocFiles(path, body.querySelector('.doc-thumbnails'));
+            }
+        }
+    }
+
+    async function loadDocFiles(path, thumbnailsEl) {
+        if (!selectedProject?.id) return;
+        thumbnailsEl.innerHTML = '<p class="doc-loading">Laden...</p>';
+
+        try {
+            const res = await fetch(`${WEBHOOK_DOCS_LIST}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}`);
+            if (!res.ok) throw new Error('Fout bij laden');
+            const files = await res.json();
+
+            docCache[path] = files;
+            renderThumbnails(path, files, thumbnailsEl);
+        } catch (err) {
+            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Geen bestanden of niet verbonden.</p>';
+            docCache[path] = [];
+        }
+    }
+
+    function renderThumbnails(path, files, thumbnailsEl) {
+        if (!files || files.length === 0) {
+            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
+            return;
+        }
+
+        thumbnailsEl.innerHTML = files.map(file => `
+            <div class="doc-thumb">
+                <img src="${WEBHOOK_DOCS_FILE}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}&file=${encodeURIComponent(file.name)}"
+                     alt="${escapeHtml(file.name)}"
+                     loading="lazy"
+                     onclick="window.open(this.src, '_blank')">
+                <div class="doc-thumb-info">
+                    <span class="doc-thumb-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                    <button type="button" class="btn btn-remove doc-thumb-delete"
+                            onclick="deleteDocFile('${escapeHtml(path)}', '${escapeHtml(file.name)}', this)"
+                            title="Verwijderen">&#x2715;</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function uploadDocFiles(input, path) {
+        if (!selectedProject?.id || !input.files.length) return;
+
+        const collectorBody = input.closest('.doc-collector-body');
+        const thumbnailsEl = collectorBody.querySelector('.doc-thumbnails');
+        const statusEl = collectorBody.querySelector('.doc-upload-status');
+
+        const files = Array.from(input.files);
+        statusEl.textContent = `Uploaden: 0/${files.length}...`;
+        statusEl.classList.add('active');
+
+        let uploaded = 0;
+        for (const file of files) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('project_id', selectedProject.id);
+            formData.append('path', path);
+
+            try {
+                const res = await fetch(WEBHOOK_DOCS_UPLOAD, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) throw new Error('Upload failed');
+                uploaded++;
+                statusEl.textContent = `Uploaden: ${uploaded}/${files.length}...`;
+            } catch (err) {
+                console.error('Upload error:', err);
+            }
+        }
+
+        statusEl.textContent = `${uploaded} bestand(en) geupload.`;
+        setTimeout(() => {
+            statusEl.classList.remove('active');
+            statusEl.textContent = '';
+        }, 3000);
+
+        // Refresh file list
+        delete docCache[path];
+        await loadDocFiles(path, thumbnailsEl);
+
+        // Reset input
+        input.value = '';
+    }
+
+    async function deleteDocFile(path, fileName, btn) {
+        if (!confirm(`"${fileName}" verwijderen?`)) return;
+        if (!selectedProject?.id) return;
+
+        try {
+            await fetch(WEBHOOK_DOCS_DELETE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: selectedProject.id,
+                    path: path,
+                    file: fileName
+                })
+            });
+
+            // Remove from cache and re-render
+            const thumbEl = btn.closest('.doc-thumb');
+            const thumbnailsEl = thumbEl.parentElement;
+            thumbEl.remove();
+
+            if (docCache[path]) {
+                docCache[path] = docCache[path].filter(f => f.name !== fileName);
+                if (docCache[path].length === 0) {
+                    thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
+                }
+            }
+        } catch (err) {
+            console.error('Delete error:', err);
+        }
+    }
+
+    function renderDocumenten() {
+        const data = collectData();
+        const container = document.getElementById('docContainer');
+        const statusText = document.getElementById('docStatusText');
+
+        if (!selectedProject?.id) {
+            statusText.textContent = 'Laad een project om documenten te beheren.';
+            container.innerHTML = '<p class="rv-empty">Laad een project en vul de invoer tab in om de documentenstructuur te zien.</p>';
+            return;
+        }
+
+        if (!data.gebouwen || data.gebouwen.length === 0) {
+            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+            container.innerHTML = '<p class="rv-empty">Vul eerst de invoer tab in om de mapstructuur te genereren.</p>';
+            return;
+        }
+
+        // Count collectors
+        let totalCollectors = 0;
+        data.gebouwen.forEach(g => g.verdiepen.forEach(v => { totalCollectors += v.collectoren.length; }));
+        statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — ${totalCollectors} collector(en)`;
+
+        // Clear cache on re-render
+        Object.keys(docCache).forEach(k => delete docCache[k]);
+
+        container.innerHTML = data.gebouwen.map(gebouw => `
+            <div class="doc-gebouw">
+                <div class="doc-gebouw-header" onclick="toggleDocGebouw(this)">
+                    <div class="doc-header-left">
+                        <span class="doc-chevron open">&#9654;</span>
+                        <span class="doc-folder-icon">&#x1F4C1;</span>
+                        <span class="badge badge-blok">Gebouw</span>
+                        <strong>${escapeHtml(gebouw.naam || 'Naamloos')}</strong>
+                    </div>
+                    <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
+                </div>
+                <div class="doc-gebouw-body open">
+                    ${gebouw.verdiepen.map(verdiep => `
+                        <div class="doc-verdiep">
+                            <div class="doc-verdiep-header" onclick="toggleDocVerdiep(this)">
+                                <div class="doc-header-left">
+                                    <span class="doc-chevron open">&#9654;</span>
+                                    <span class="doc-folder-icon">&#x1F4C2;</span>
+                                    <span class="badge badge-verdiep">Verdiep</span>
+                                    <strong>${verdiep.nummer}</strong>
+                                </div>
+                                <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
+                            </div>
+                            <div class="doc-verdiep-body open">
+                                ${verdiep.collectoren.map(col => {
+                                    const docPath = getDocPath(gebouw.naam, verdiep.nummer, col.nummer);
+                                    return `
+                                        <div class="doc-collector">
+                                            <div class="doc-collector-header" data-doc-path="${escapeHtml(docPath)}" onclick="toggleDocCollector(this)">
+                                                <div class="doc-header-left">
+                                                    <span class="doc-chevron">&#9654;</span>
+                                                    <span class="doc-folder-icon">&#x1F4F7;</span>
+                                                    <span class="badge badge-collector">Col ${col.nummer}</span>
+                                                    <strong>${escapeHtml(col.naam || '')}</strong>
+                                                    <span class="doc-meta">${col.aantalKringen} kringen</span>
+                                                </div>
+                                            </div>
+                                            <div class="doc-collector-body">
+                                                <div class="doc-upload-area">
+                                                    <label class="doc-upload-btn">
+                                                        <input type="file" accept="image/*" multiple
+                                                               onchange="uploadDocFiles(this, '${escapeHtml(docPath)}')"
+                                                               style="display:none">
+                                                        &#x1F4F7; Foto's uploaden
+                                                    </label>
+                                                    <span class="doc-upload-status"></span>
+                                                </div>
+                                                <div class="doc-thumbnails">
+                                                    <p class="doc-loading" style="color:#868e96;">Klik om foto's te laden.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
     }
 }
 
