@@ -858,14 +858,86 @@ select:focus {
     background: #c1121f;
 }
 
-.rv-lock-status {
+/* Locked sessions */
+.rv-session-locked {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 12px;
+    border-left: 4px solid #2d6a4f;
+    overflow: hidden;
+}
+
+.rv-session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: #f0f7f4;
+    cursor: pointer;
+    user-select: none;
+}
+
+.rv-session-header:hover {
+    background: #e3f0e9;
+}
+
+.rv-session-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.rv-session-summary {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: normal;
+}
+
+.rv-session-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.rv-session-actions .chevron {
+    transition: transform 0.2s;
     font-size: 0.8rem;
     color: #868e96;
 }
 
-.rv-lock-status.active {
-    color: #e63946;
+.rv-session-actions .chevron.open {
+    transform: rotate(90deg);
+}
+
+.rv-session-body {
+    display: none;
+    padding: 12px 14px;
+    border-top: 1px solid #e9ecef;
+}
+
+.rv-session-body.open {
+    display: block;
+}
+
+.rv-session-kringen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.rv-session-kring-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.75rem;
     font-weight: 600;
+    color: #495057;
 }
 
 .rv-rollen-config-header {
