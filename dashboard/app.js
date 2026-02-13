@@ -3,10 +3,8 @@ const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
-const WEBHOOK_DOCS_UPLOAD = WEBHOOK_BASE + '/thermoduct-docs-upload';
-const WEBHOOK_DOCS_LIST = WEBHOOK_BASE + '/thermoduct-docs-list';
-const WEBHOOK_DOCS_DELETE = WEBHOOK_BASE + '/thermoduct-docs-delete';
-const WEBHOOK_DOCS_FILE = WEBHOOK_BASE + '/thermoduct-docs-file';
+// Document management endpoints (TODO: configure when file server is set up)
+const DOCS_API_BASE = '';
 
 // Odoo stage names (must match Odoo project stages)
 const STAGES = {
@@ -1308,20 +1306,11 @@ function initApp() {
     }
 
     async function loadDocFiles(path, thumbnailsEl) {
-        if (!selectedProject?.id) return;
-        thumbnailsEl.innerHTML = '<p class="doc-loading">Laden...</p>';
-
-        try {
-            const res = await fetch(`${WEBHOOK_DOCS_LIST}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}`);
-            if (!res.ok) throw new Error('Fout bij laden');
-            const files = await res.json();
-
-            docCache[path] = files;
-            renderThumbnails(path, files, thumbnailsEl);
-        } catch (err) {
-            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Geen bestanden of niet verbonden.</p>';
-            docCache[path] = [];
+        if (!selectedProject?.id || !DOCS_API_BASE) {
+            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Documentbeheer nog niet geconfigureerd.</p>';
+            return;
         }
+        // TODO: implement with HTTP file server
     }
 
     function renderThumbnails(path, files, thumbnailsEl) {
@@ -1332,7 +1321,7 @@ function initApp() {
 
         thumbnailsEl.innerHTML = files.map(file => `
             <div class="doc-thumb">
-                <img src="${WEBHOOK_DOCS_FILE}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}&file=${encodeURIComponent(file.name)}"
+                <img src="${file.url}"
                      alt="${escapeHtml(file.name)}"
                      loading="lazy"
                      onclick="window.open(this.src, '_blank')">
@@ -1348,78 +1337,19 @@ function initApp() {
 
     async function uploadDocFiles(input, path) {
         if (!selectedProject?.id || !input.files.length) return;
-
-        const collectorBody = input.closest('.doc-collector-body');
-        const thumbnailsEl = collectorBody.querySelector('.doc-thumbnails');
-        const statusEl = collectorBody.querySelector('.doc-upload-status');
-
-        const files = Array.from(input.files);
-        statusEl.textContent = `Uploaden: 0/${files.length}...`;
-        statusEl.classList.add('active');
-
-        let uploaded = 0;
-        for (const file of files) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('project_id', selectedProject.id);
-            formData.append('path', path);
-
-            try {
-                const res = await fetch(WEBHOOK_DOCS_UPLOAD, {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!res.ok) throw new Error('Upload failed');
-                uploaded++;
-                statusEl.textContent = `Uploaden: ${uploaded}/${files.length}...`;
-            } catch (err) {
-                console.error('Upload error:', err);
-            }
+        if (!DOCS_API_BASE) {
+            alert('Documentbeheer nog niet geconfigureerd.');
+            input.value = '';
+            return;
         }
-
-        statusEl.textContent = `${uploaded} bestand(en) geupload.`;
-        setTimeout(() => {
-            statusEl.classList.remove('active');
-            statusEl.textContent = '';
-        }, 3000);
-
-        // Refresh file list
-        delete docCache[path];
-        await loadDocFiles(path, thumbnailsEl);
-
-        // Reset input
+        // TODO: implement with HTTP file server
         input.value = '';
     }
 
     async function deleteDocFile(path, fileName, btn) {
         if (!confirm(`"${fileName}" verwijderen?`)) return;
-        if (!selectedProject?.id) return;
-
-        try {
-            await fetch(WEBHOOK_DOCS_DELETE, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    project_id: selectedProject.id,
-                    path: path,
-                    file: fileName
-                })
-            });
-
-            // Remove from cache and re-render
-            const thumbEl = btn.closest('.doc-thumb');
-            const thumbnailsEl = thumbEl.parentElement;
-            thumbEl.remove();
-
-            if (docCache[path]) {
-                docCache[path] = docCache[path].filter(f => f.name !== fileName);
-                if (docCache[path].length === 0) {
-                    thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
-                }
-            }
-        } catch (err) {
-            console.error('Delete error:', err);
-        }
+        if (!selectedProject?.id || !DOCS_API_BASE) return;
+        // TODO: implement with HTTP file server
     }
 
     function renderDocumenten() {
