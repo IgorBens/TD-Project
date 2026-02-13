@@ -732,3 +732,318 @@ select:focus {
 .rv-stat-warning strong {
     color: #e63946;
 }
+
+/* =============================================
+   ===== VERKOOPSORDER TAB =====
+   ============================================= */
+
+.vo-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.vo-section {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+.vo-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.vo-section-header h3 {
+    font-size: 0.95rem;
+    color: #495057;
+    margin: 0;
+}
+
+.vo-section-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.vo-section-body {
+    padding: 0;
+}
+
+.vo-tabel {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.vo-tabel th {
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #e9ecef;
+    font-size: 0.8rem;
+}
+
+.vo-tabel td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.vo-tabel tr:last-child td {
+    border-bottom: none;
+}
+
+.vo-tabel tr:hover:not(.vo-empty-row) {
+    background: #f8f9fa;
+}
+
+.vo-empty-row td {
+    text-align: center;
+    color: #868e96;
+    font-style: italic;
+    padding: 24px 14px;
+}
+
+/* =============================================
+   ===== ROLVERDELING LOCK/COLLAPSE =====
+   ============================================= */
+
+.rv-lock-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.btn-lock {
+    background: #f8f9fa;
+    border: 1px solid #ced4da;
+    color: #495057;
+    padding: 6px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: 6px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+}
+
+.btn-lock:hover {
+    background: #e9ecef;
+}
+
+.btn-lock.locked {
+    background: #e63946;
+    color: #fff;
+    border-color: #e63946;
+}
+
+.btn-lock.locked:hover {
+    background: #c1121f;
+}
+
+.rv-lock-status {
+    font-size: 0.8rem;
+    color: #868e96;
+}
+
+.rv-lock-status.active {
+    color: #e63946;
+    font-weight: 600;
+}
+
+.rv-rollen-config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    padding-bottom: 8px;
+}
+
+.rv-rollen-config-header:hover {
+    opacity: 0.7;
+}
+
+.rv-rollen-config-header .chevron {
+    transition: transform 0.2s;
+    font-size: 0.8rem;
+    color: #868e96;
+}
+
+.rv-rollen-config-header .chevron.open {
+    transform: rotate(90deg);
+}
+
+.rv-rollen-config-body {
+    display: none;
+}
+
+.rv-rollen-config-body.open {
+    display: block;
+}
+
+/* =============================================
+   ===== VORDERING TAB =====
+   ============================================= */
+
+.vd-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 16px;
+}
+
+.vd-select-all-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.vd-selected-count {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.vd-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vd-gebouw,
+.vd-verdiep,
+.vd-collector {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.vd-gebouw {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-left: 4px solid #e63946;
+}
+
+.vd-verdiep {
+    border-left: 3px solid #457b9d;
+    margin-left: 8px;
+}
+
+.vd-collector {
+    border-left: 3px solid #2a9d8f;
+    margin-left: 8px;
+}
+
+.vd-item-header {
+    padding: 8px 12px;
+}
+
+.vd-item-header label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: normal;
+    margin: 0;
+}
+
+.vd-item-header input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #2a9d8f;
+}
+
+.vd-level-gebouw {
+    background: #fdf2f2;
+}
+
+.vd-level-verdiep {
+    background: #f0f5f8;
+}
+
+.vd-level-collector {
+    background: #f0faf8;
+}
+
+.vd-meta {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-left: 4px;
+}
+
+.vd-children {
+    padding: 4px 0 4px 4px;
+}
+
+.vd-kringen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px;
+    padding: 6px 8px 8px;
+}
+
+.vd-kring {
+    background: #fffdf0;
+    border: 1px solid #f0ecd8;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+.vd-kring label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: normal;
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.vd-kring input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: #2a9d8f;
+}
+
+.vd-kring-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.vd-kring-nr {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #1a1a2e;
+}
+
+.vd-kring-detail {
+    font-size: 0.75rem;
+    color: #6c757d;
+}

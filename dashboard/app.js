@@ -22,6 +22,7 @@ let rollen = [];
 let rolCounter = 0;
 let selectedProject = null;
 let appInitialized = false;
+let rolverdelingLocked = false;
 
 const loginOverlay = document.getElementById('loginOverlay');
 const appContainer = document.getElementById('appContainer');
@@ -162,6 +163,11 @@ function initApp() {
     window.addCollector = addCollector;
     window.removeRol = removeRol;
     window.assignRolToKring = assignRolToKring;
+    window.toggleRollenConfig = toggleRollenConfig;
+    window.toggleVdGebouw = toggleVdGebouw;
+    window.toggleVdVerdiep = toggleVdVerdiep;
+    window.toggleVdCollector = toggleVdCollector;
+    window.toggleVdKring = toggleVdKring;
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -173,6 +179,9 @@ function initApp() {
 
             if (tab.dataset.tab === 'rolverdeling') {
                 renderRolverdeling();
+            }
+            if (tab.dataset.tab === 'vordering') {
+                renderVordering();
             }
         });
     });
@@ -945,6 +954,168 @@ function initApp() {
             <div class="rv-stat-row"><span>Kleinste kring</span><strong>${kleinsteKring.toFixed(1)} m</strong></div>
             <div class="rv-stat-row"><span>Gemiddelde kring</span><strong>${gemiddeldeKring.toFixed(1)} m</strong></div>
         `;
+    }
+
+    // =============================================
+    // ===== ROLVERDELING LOCK/COLLAPSE =====
+    // =============================================
+
+    function toggleRollenConfig(headerEl) {
+        const body = document.getElementById('rvRollenConfigBody');
+        const chevron = headerEl.querySelector('.chevron');
+        body.classList.toggle('open');
+        chevron.classList.toggle('open');
+    }
+
+    const btnLock = document.getElementById('btnLockRolverdeling');
+    btnLock.addEventListener('click', () => {
+        rolverdelingLocked = !rolverdelingLocked;
+        const lockIcon = btnLock.querySelector('.lock-icon');
+        const lockStatus = document.getElementById('rvLockStatus');
+
+        if (rolverdelingLocked) {
+            btnLock.innerHTML = '<span class="lock-icon">&#x1F512;</span> Rolverdeling ontgrendelen';
+            btnLock.classList.add('locked');
+            lockStatus.textContent = 'Vastzezet — toewijzingen zijn vergrendeld';
+            lockStatus.classList.add('active');
+
+            // Disable all selects in rolverdeling
+            document.querySelectorAll('#rvCollectorenOverzicht select').forEach(s => s.disabled = true);
+            document.querySelectorAll('#rvRollenConfig button, #rvRollenConfig select, #rvRollenConfig input').forEach(el => el.disabled = true);
+        } else {
+            btnLock.innerHTML = '<span class="lock-icon">&#x1F513;</span> Rolverdeling vastzetten';
+            btnLock.classList.remove('locked');
+            lockStatus.textContent = '';
+            lockStatus.classList.remove('active');
+
+            // Re-enable
+            document.querySelectorAll('#rvCollectorenOverzicht select').forEach(s => s.disabled = false);
+            document.querySelectorAll('#rvRollenConfig button, #rvRollenConfig select, #rvRollenConfig input').forEach(el => el.disabled = false);
+        }
+    });
+
+    // =============================================
+    // ===== VORDERING TAB =====
+    // =============================================
+
+    const vdSelectAll = document.getElementById('vdSelectAll');
+    vdSelectAll.addEventListener('change', () => {
+        document.querySelectorAll('#vdContainer .vd-checkbox').forEach(cb => {
+            cb.checked = vdSelectAll.checked;
+        });
+        updateVdCount();
+    });
+
+    function toggleVdGebouw(cb) {
+        const gebouwEl = cb.closest('.vd-gebouw');
+        gebouwEl.querySelectorAll('.vd-checkbox').forEach(c => { c.checked = cb.checked; });
+        updateVdCount();
+    }
+
+    function toggleVdVerdiep(cb) {
+        const verdiepEl = cb.closest('.vd-verdiep');
+        verdiepEl.querySelectorAll('.vd-checkbox').forEach(c => { c.checked = cb.checked; });
+        // Update parent gebouw state
+        updateParentCheckbox(verdiepEl.closest('.vd-gebouw'));
+        updateVdCount();
+    }
+
+    function toggleVdCollector(cb) {
+        const collectorEl = cb.closest('.vd-collector');
+        collectorEl.querySelectorAll('.vd-checkbox').forEach(c => { c.checked = cb.checked; });
+        // Update parents
+        updateParentCheckbox(collectorEl.closest('.vd-verdiep'));
+        updateParentCheckbox(collectorEl.closest('.vd-gebouw'));
+        updateVdCount();
+    }
+
+    function toggleVdKring(cb) {
+        // Update parents
+        updateParentCheckbox(cb.closest('.vd-collector'));
+        updateParentCheckbox(cb.closest('.vd-verdiep'));
+        updateParentCheckbox(cb.closest('.vd-gebouw'));
+        updateVdCount();
+    }
+
+    function updateParentCheckbox(parentEl) {
+        if (!parentEl) return;
+        const parentCb = parentEl.querySelector(':scope > .vd-item-header .vd-checkbox');
+        if (!parentCb) return;
+        const children = parentEl.querySelectorAll('.vd-children .vd-checkbox');
+        const allChecked = [...children].every(c => c.checked);
+        const someChecked = [...children].some(c => c.checked);
+        parentCb.checked = allChecked;
+        parentCb.indeterminate = !allChecked && someChecked;
+    }
+
+    function updateVdCount() {
+        const allKringen = document.querySelectorAll('#vdContainer .vd-kring .vd-checkbox');
+        const checked = [...allKringen].filter(c => c.checked).length;
+        document.getElementById('vdSelectedCount').textContent = `${checked} geselecteerd`;
+    }
+
+    function renderVordering() {
+        const data = collectData();
+        const container = document.getElementById('vdContainer');
+
+        if (!data.gebouwen || data.gebouwen.length === 0) {
+            container.innerHTML = '<p class="rv-empty">Laad een project en vul de invoer tab in om de vordering te bekijken.</p>';
+            return;
+        }
+
+        container.innerHTML = data.gebouwen.map(gebouw => `
+            <div class="vd-gebouw">
+                <div class="vd-item-header vd-level-gebouw">
+                    <label>
+                        <input type="checkbox" class="vd-checkbox" onchange="toggleVdGebouw(this)">
+                        <span class="badge badge-blok">Gebouw</span>
+                        <strong>${escapeHtml(gebouw.naam || 'Naamloos')}</strong>
+                    </label>
+                </div>
+                <div class="vd-children">
+                    ${gebouw.verdiepen.map(verdiep => `
+                        <div class="vd-verdiep">
+                            <div class="vd-item-header vd-level-verdiep">
+                                <label>
+                                    <input type="checkbox" class="vd-checkbox" onchange="toggleVdVerdiep(this)">
+                                    <span class="badge badge-verdiep">Verdiep</span>
+                                    <strong>${verdiep.nummer}</strong>
+                                </label>
+                            </div>
+                            <div class="vd-children">
+                                ${verdiep.collectoren.map(col => `
+                                    <div class="vd-collector">
+                                        <div class="vd-item-header vd-level-collector">
+                                            <label>
+                                                <input type="checkbox" class="vd-checkbox" onchange="toggleVdCollector(this)">
+                                                <span class="badge badge-collector">Col ${col.nummer}</span>
+                                                <strong>${escapeHtml(col.naam || '')}</strong>
+                                                <span class="vd-meta">${col.druk} bar &middot; ${col.aantalKringen} kringen</span>
+                                            </label>
+                                        </div>
+                                        <div class="vd-children vd-kringen-grid">
+                                            ${col.kringen.map(k => `
+                                                <div class="vd-kring">
+                                                    <label>
+                                                        <input type="checkbox" class="vd-checkbox" onchange="toggleVdKring(this)">
+                                                        <span class="vd-kring-info">
+                                                            <span class="vd-kring-nr">K${k.nummer}</span>
+                                                            <span class="vd-kring-detail">${k.lengte}m &middot; ${k.m2}m&sup2;</span>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+
+        updateVdCount();
     }
 }
 
