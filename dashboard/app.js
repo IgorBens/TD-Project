@@ -6,6 +6,7 @@ const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
 const WEBHOOK_FOLDERS = WEBHOOK_BASE + '/thermoduct-folders';
 const WEBHOOK_FOLDER_DELETE = WEBHOOK_BASE + '/thermoduct-folder-delete';
 const WEBHOOK_FILES = WEBHOOK_BASE + '/thermoduct-files';
+const WEBHOOK_SERVE_FILE = WEBHOOK_BASE + '/thermoduct-serve-file';
 const WEBHOOK_UPLOAD_FORM = 'http://46.225.76.46:5678/form/c939dab0-c13d-4f51-95b7-50ddc4068880';
 
 // Odoo stage names (must match Odoo project stages)
@@ -1318,9 +1319,15 @@ function initApp() {
 
             filesListEl.innerHTML = data.files.map(file => {
                 const sizeKB = Math.round(file.size / 1024);
+                const isImage = /\.(jpg|jpeg|png|webp|heic|gif|bmp)$/i.test(file.name);
+                const thumbUrl = isImage
+                    ? `${WEBHOOK_SERVE_FILE}?project_id=${selectedProject.id}&folder_path=${encodeURIComponent(folderPath)}&file_name=${encodeURIComponent(file.name)}`
+                    : '';
                 return `
-                    <div class="doc-file-item">
-                        <span class="doc-file-icon">&#x1F4C4;</span>
+                    <div class="doc-file-item${isImage ? ' doc-file-item--image' : ''}">
+                        ${isImage
+                            ? `<img class="doc-file-thumb" src="${thumbUrl}" alt="" loading="lazy">`
+                            : '<span class="doc-file-icon">&#x1F4C4;</span>'}
                         <span class="doc-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
                         <span class="doc-file-size">${sizeKB} KB</span>
                     </div>

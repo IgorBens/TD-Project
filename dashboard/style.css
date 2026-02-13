@@ -1341,6 +1341,20 @@ select:focus {
     flex-shrink: 0;
 }
 
+.doc-file-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+    background: #f1f3f5;
+}
+
+.doc-file-item--image {
+    align-items: center;
+    padding: 6px 8px;
+}
+
 .doc-file-name {
     flex: 1;
     overflow: hidden;
