@@ -28,6 +28,7 @@ let rollen = [];
 let rolCounter = 0;
 let selectedProject = null;
 let appInitialized = false;
+let lastSavedSnapshot = null; // Snapshot for dirty tracking
 
 // Rolverdeling sessions: array of locked sessions
 // Each session: { rollen: [...], toewijzingen: { kringCode: rolId }, locked: true }
@@ -630,6 +631,62 @@ function initApp() {
         return { project_id: projectId, project_naam: projectNaam, gebouwen };
     }
 
+    // ===== Dirty tracking =====
+    function createSnapshot(data) {
+        // Create a flat lookup of item values keyed by odoo_id
+        const snap = {};
+        (data.gebouwen || []).forEach((g, gi) => {
+            const gKey = g.odoo_id || `new_g_${gi}`;
+            snap[gKey] = { naam: g.naam };
+            (g.verdiepen || []).forEach((v, vi) => {
+                const vKey = v.odoo_id || `new_v_${gi}_${vi}`;
+                snap[vKey] = { nummer: v.nummer };
+                (v.collectoren || []).forEach((c, ci) => {
+                    const cKey = c.odoo_id || `new_c_${gi}_${vi}_${ci}`;
+                    snap[cKey] = { nummer: c.nummer, naam: c.naam, druk: c.druk, randisolatie: c.randisolatie, uitzetvoegen: c.uitzetvoegen };
+                    (c.kringen || []).forEach((k, ki) => {
+                        const kKey = k.odoo_id || `new_k_${gi}_${vi}_${ci}_${ki}`;
+                        snap[kKey] = { nummer: k.nummer, systeem: k.systeem, legpatroon: k.legpatroon, lengte: k.lengte, m2: k.m2 };
+                    });
+                });
+            });
+        });
+        return snap;
+    }
+
+    function markDirtyItems(data) {
+        if (!lastSavedSnapshot) {
+            // No snapshot = first save, everything is dirty
+            return data;
+        }
+        const snap = lastSavedSnapshot;
+        const marked = JSON.parse(JSON.stringify(data));
+        marked.gebouwen.forEach((g, gi) => {
+            const gKey = g.odoo_id || `new_g_${gi}`;
+            const prev = snap[gKey];
+            g.dirty = !prev || prev.naam !== g.naam;
+
+            (g.verdiepen || []).forEach((v, vi) => {
+                const vKey = v.odoo_id || `new_v_${gi}_${vi}`;
+                const prevV = snap[vKey];
+                v.dirty = !prevV || prevV.nummer !== v.nummer;
+
+                (v.collectoren || []).forEach((c, ci) => {
+                    const cKey = c.odoo_id || `new_c_${gi}_${vi}_${ci}`;
+                    const prevC = snap[cKey];
+                    c.dirty = !prevC || prevC.nummer !== c.nummer || prevC.naam !== c.naam || prevC.druk !== c.druk || prevC.randisolatie !== c.randisolatie || prevC.uitzetvoegen !== c.uitzetvoegen;
+
+                    (c.kringen || []).forEach((k, ki) => {
+                        const kKey = k.odoo_id || `new_k_${gi}_${vi}_${ci}_${ki}`;
+                        const prevK = snap[kKey];
+                        k.dirty = !prevK || prevK.nummer !== k.nummer || prevK.systeem !== k.systeem || prevK.legpatroon !== k.legpatroon || prevK.lengte !== k.lengte || prevK.m2 !== k.m2;
+                    });
+                });
+            });
+        });
+        return marked;
+    }
+
     function validate(data) {
         if (!data.project_id) return 'Voer eerst een project ID in en klik op Laden.';
         if (data.gebouwen.length === 0) return 'Voeg minstens één gebouw toe.';
@@ -657,6 +714,9 @@ function initApp() {
             return;
         }
 
+        // Mark dirty items based on snapshot comparison
+        const markedData = markDirtyItems(data);
+
         btnOpslaan.disabled = true;
         btnOpslaan.textContent = 'Verzenden...';
 
@@ -664,7 +724,7 @@ function initApp() {
             const response = await authFetch(WEBHOOK_SAVE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'save', ...data })
+                body: JSON.stringify({ action: 'save', ...markedData })
             });
 
             if (!response.ok) {
@@ -675,6 +735,9 @@ function initApp() {
             if (result?.gebouwen) {
                 updateOdooIds(result.gebouwen);
             }
+
+            // Update snapshot after successful save
+            lastSavedSnapshot = createSnapshot(collectData());
 
             showStatus('Data succesvol opgeslagen in Odoo!', 'success');
         } catch (err) {
@@ -757,6 +820,9 @@ function initApp() {
             if (data.gebouwen && Array.isArray(data.gebouwen)) {
                 data.gebouwen.forEach(g => addGebouw(g));
             }
+
+            // Store snapshot for dirty tracking
+            lastSavedSnapshot = createSnapshot(collectData());
 
             showStatus(`Project "${selectedProject.naam}" geladen met ${data.gebouwen?.length || 0} gebouw(en).`, 'success');
         } catch (err) {
