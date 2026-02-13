@@ -18,23 +18,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const input = $input.first();\nconst body = input.json.body || input.json;\nconst projectId = String(body.project_id || '').replace(/[^a-zA-Z0-9_-]/g, '');\nconst subPath = String(body.path || '').replace(/\\.\\./g, '').replace(/^\\//,'');\n\nif (!projectId || !subPath) {\n  throw new Error('project_id en path zijn verplicht.');\n}\n\nconst basePath = '/home/node/n8n-files/projects';\nconst targetDir = `${basePath}/${projectId}/${subPath}`;\n\n// Geef binary data door met het doelpad\nconst binaryKeys = Object.keys(input.binary || {});\nconst items = [];\n\nfor (const key of binaryKeys) {\n  const binaryData = input.binary[key];\n  const fileName = (binaryData.fileName || `upload_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');\n  \n  items.push({\n    json: {\n      targetDir,\n      fileName,\n      fullPath: `${targetDir}/${fileName}`\n    },\n    binary: {\n      data: input.binary[key]\n    }\n  });\n}\n\nif (items.length === 0) {\n  throw new Error('Geen bestanden ontvangen.');\n}\n\nreturn items;"
+        "jsCode": "const input = $input.first();\nconst body = input.json.body || input.json;\nconst projectId = String(body.project_id || '').replace(/[^a-zA-Z0-9_-]/g, '');\nconst subPath = String(body.path || '').replace(/\\.\\./g, '').replace(/^\\//,'');\n\nif (!projectId || !subPath) {\n  throw new Error('project_id en path zijn verplicht.');\n}\n\nconst basePath = '/home/node/n8n-files/projects';\nconst targetDir = `${basePath}/${projectId}/${subPath}`;\n\nconst binaryKeys = Object.keys(input.binary || {});\nconst items = [];\n\nfor (const key of binaryKeys) {\n  const binaryData = input.binary[key];\n  const fileName = (binaryData.fileName || `upload_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');\n  \n  items.push({\n    json: {\n      targetDir,\n      fileName,\n      fullPath: `${targetDir}/${fileName}`\n    },\n    binary: {\n      data: input.binary[key]\n    }\n  });\n}\n\nif (items.length === 0) {\n  throw new Error('Geen bestanden ontvangen.');\n}\n\nreturn items;"
       },
       "id": "d0c5-0001-4000-8000-000000000002",
       "name": "Prepare Paths",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [220, 300]
-    },
-    {
-      "parameters": {
-        "command": "mkdir -p \"{{ $json.targetDir }}\""
-      },
-      "id": "d0c5-0001-4000-8000-000000000006",
-      "name": "Create Directory",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [440, 300]
     },
     {
       "parameters": {
@@ -47,7 +37,7 @@
       "name": "Write File",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [660, 300]
+      "position": [440, 300]
     },
     {
       "parameters": {
@@ -57,7 +47,7 @@
       "name": "Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 300]
+      "position": [660, 300]
     }
   ],
   "connections": {
@@ -67,11 +57,6 @@
       ]
     },
     "Prepare Paths": {
-      "main": [
-        [{ "node": "Create Directory", "type": "main", "index": 0 }]
-      ]
-    },
-    "Create Directory": {
       "main": [
         [{ "node": "Write File", "type": "main", "index": 0 }]
       ]
