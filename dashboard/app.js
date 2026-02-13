@@ -3,6 +3,8 @@ const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
+const WEBHOOK_FOLDERS = WEBHOOK_BASE + '/thermoduct-folders';
+const WEBHOOK_FOLDER_DELETE = WEBHOOK_BASE + '/thermoduct-folder-delete';
 // Document management endpoints (TODO: configure when file server is set up)
 const DOCS_API_BASE = '';
 
@@ -179,7 +181,7 @@ function initApp() {
     window.toggleDocCollector = toggleDocCollector;
     window.uploadDocFiles = uploadDocFiles;
     window.deleteDocFile = deleteDocFile;
-    window.deleteDocItem = deleteDocItem;
+    window.deleteDocFolder = deleteDocFolder;
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -1354,85 +1356,32 @@ function initApp() {
         // TODO: implement with HTTP file server
     }
 
-    async function deleteDocItem(level, odooId, label, btnEl) {
-        if (!confirm(`${label} en alle onderliggende items verwijderen?`)) return;
+    async function deleteDocFolder(folderPath, label, btnEl) {
+        if (!confirm(`Map "${label}" en alle inhoud verwijderen van de server?`)) return;
         if (!selectedProject?.id) return;
 
-        // Verzamel alle odoo_ids die verwijderd moeten worden
-        // Zoek het item en al zijn kinderen in de huidige data
-        const data = collectData();
-        const idsToDelete = [];
-
-        function collectIds(gebouwen) {
-            for (const g of gebouwen) {
-                if (level === 'gebouw' && String(g.odoo_id) === String(odooId)) {
-                    if (g.odoo_id) idsToDelete.push(parseInt(g.odoo_id));
-                    for (const v of g.verdiepen) {
-                        if (v.odoo_id) idsToDelete.push(parseInt(v.odoo_id));
-                        for (const c of v.collectoren) {
-                            if (c.odoo_id) idsToDelete.push(parseInt(c.odoo_id));
-                            for (const k of c.kringen) {
-                                if (k.odoo_id) idsToDelete.push(parseInt(k.odoo_id));
-                            }
-                        }
-                    }
-                    return;
-                }
-                for (const v of g.verdiepen) {
-                    if (level === 'verdiep' && String(v.odoo_id) === String(odooId)) {
-                        if (v.odoo_id) idsToDelete.push(parseInt(v.odoo_id));
-                        for (const c of v.collectoren) {
-                            if (c.odoo_id) idsToDelete.push(parseInt(c.odoo_id));
-                            for (const k of c.kringen) {
-                                if (k.odoo_id) idsToDelete.push(parseInt(k.odoo_id));
-                            }
-                        }
-                        return;
-                    }
-                    for (const c of v.collectoren) {
-                        if (level === 'collector' && String(c.odoo_id) === String(odooId)) {
-                            if (c.odoo_id) idsToDelete.push(parseInt(c.odoo_id));
-                            for (const k of c.kringen) {
-                                if (k.odoo_id) idsToDelete.push(parseInt(k.odoo_id));
-                            }
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        collectIds(data.gebouwen);
-
-        if (idsToDelete.length === 0) {
-            showStatus('Geen Odoo IDs gevonden om te verwijderen.', 'error');
-            return;
-        }
-
-        // Disable knop tijdens verwijderen
         btnEl.disabled = true;
         btnEl.textContent = '...';
 
         try {
-            await authFetch(WEBHOOK_SAVE, {
+            const res = await authFetch(WEBHOOK_FOLDER_DELETE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'delete',
                     project_id: selectedProject.id,
-                    project_naam: selectedProject.naam || '',
-                    odoo_ids: idsToDelete
+                    folder_path: folderPath
                 })
             });
 
-            // Verwijder de corresponderende card uit de Invoer tab
-            const invoerCard = gebouwenContainer.querySelector(`.card[data-odoo-id="${odooId}"]`);
-            if (invoerCard) invoerCard.remove();
-
-            showStatus(`${label} verwijderd (${idsToDelete.length} item(s) uit Odoo).`, 'success');
-
-            // Herrender de Documenten tab
-            renderDocumenten();
+            const result = await res.json();
+            if (result.success) {
+                showStatus(result.message, 'success');
+                renderDocumenten(); // Herlaad van server
+            } else {
+                showStatus(result.message || 'Verwijderen mislukt.', 'error');
+                btnEl.disabled = false;
+                btnEl.textContent = '\u{1F5D1}';
+            }
         } catch (err) {
             showStatus(`Fout bij verwijderen: ${err.message}`, 'error');
             btnEl.disabled = false;
@@ -1440,100 +1389,103 @@ function initApp() {
         }
     }
 
-    function renderDocumenten() {
-        const data = collectData();
+    async function renderDocumenten() {
         const container = document.getElementById('docContainer');
         const statusText = document.getElementById('docStatusText');
 
         if (!selectedProject?.id) {
             statusText.textContent = 'Laad een project om documenten te beheren.';
-            container.innerHTML = '<p class="rv-empty">Laad een project en vul de invoer tab in om de documentenstructuur te zien.</p>';
+            container.innerHTML = '<p class="rv-empty">Laad een project om de servermappen te bekijken.</p>';
             return;
         }
 
-        if (!data.gebouwen || data.gebouwen.length === 0) {
-            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
-            container.innerHTML = '<p class="rv-empty">Vul eerst de invoer tab in om de mapstructuur te genereren.</p>';
-            return;
-        }
+        // Toon loading state
+        statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — mappen laden...`;
+        container.innerHTML = '<p class="rv-empty">Mappen ophalen van server...</p>';
 
-        // Count collectors
-        let totalCollectors = 0;
-        data.gebouwen.forEach(g => g.verdiepen.forEach(v => { totalCollectors += v.collectoren.length; }));
-        statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — ${totalCollectors} collector(en)`;
+        try {
+            const res = await fetch(`${WEBHOOK_FOLDERS}?project_id=${selectedProject.id}`);
+            const data = await res.json();
 
-        // Clear cache on re-render
-        Object.keys(docCache).forEach(k => delete docCache[k]);
+            if (!data.success) {
+                statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+                container.innerHTML = `<p class="rv-empty">Fout: ${escapeHtml(data.error || 'Kan mappen niet laden.')}</p>`;
+                return;
+            }
 
-        container.innerHTML = data.gebouwen.map(gebouw => `
-            <div class="doc-gebouw">
-                <div class="doc-gebouw-header" onclick="toggleDocGebouw(this)">
-                    <div class="doc-header-left">
-                        <span class="doc-chevron open">&#9654;</span>
-                        <span class="doc-folder-icon">&#x1F4C1;</span>
-                        <span class="badge badge-blok">Gebouw</span>
-                        <strong>${escapeHtml(gebouw.naam || 'Naamloos')}</strong>
+            if (!data.exists || !data.tree || data.tree.length === 0) {
+                statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+                container.innerHTML = '<p class="rv-empty">Nog geen mappen op de server. Sla eerst data op via de Invoer tab.</p>';
+                return;
+            }
+
+            // Tel totalen
+            let totalVerdiepen = 0;
+            let totalCollectoren = 0;
+            data.tree.forEach(g => {
+                totalVerdiepen += g.verdiepen.length;
+                g.verdiepen.forEach(v => { totalCollectoren += v.collectoren.length; });
+            });
+            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — ${data.tree.length} gebouw(en), ${totalVerdiepen} verdiep(en), ${totalCollectoren} collector(en)`;
+
+            container.innerHTML = data.tree.map(gebouw => `
+                <div class="doc-gebouw">
+                    <div class="doc-gebouw-header" onclick="toggleDocGebouw(this)">
+                        <div class="doc-header-left">
+                            <span class="doc-chevron open">&#9654;</span>
+                            <span class="doc-folder-icon">&#x1F4C1;</span>
+                            <span class="badge badge-blok">Gebouw</span>
+                            <strong>${escapeHtml(gebouw.name)}</strong>
+                        </div>
+                        <div class="doc-header-right">
+                            <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
+                            <button class="doc-delete-btn" title="Map verwijderen" onclick="event.stopPropagation(); deleteDocFolder('${escapeHtml(gebouw.path)}', '${escapeHtml(gebouw.name)}', this)">&#x1F5D1;</button>
+                        </div>
                     </div>
-                    <div class="doc-header-right">
-                        <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
-                        ${gebouw.odoo_id ? `<button class="doc-delete-btn" title="Gebouw verwijderen" onclick="event.stopPropagation(); deleteDocItem('gebouw', '${gebouw.odoo_id}', '${escapeHtml(gebouw.naam || '')}', this)">&#x1F5D1;</button>` : ''}
-                    </div>
-                </div>
-                <div class="doc-gebouw-body open">
-                    ${gebouw.verdiepen.map(verdiep => `
-                        <div class="doc-verdiep">
-                            <div class="doc-verdiep-header" onclick="toggleDocVerdiep(this)">
-                                <div class="doc-header-left">
-                                    <span class="doc-chevron open">&#9654;</span>
-                                    <span class="doc-folder-icon">&#x1F4C2;</span>
-                                    <span class="badge badge-verdiep">Verdiep</span>
-                                    <strong>${verdiep.nummer}</strong>
+                    <div class="doc-gebouw-body open">
+                        ${gebouw.verdiepen.map(verdiep => `
+                            <div class="doc-verdiep">
+                                <div class="doc-verdiep-header" onclick="toggleDocVerdiep(this)">
+                                    <div class="doc-header-left">
+                                        <span class="doc-chevron open">&#9654;</span>
+                                        <span class="doc-folder-icon">&#x1F4C2;</span>
+                                        <span class="badge badge-verdiep">Verdiep</span>
+                                        <strong>${escapeHtml(verdiep.name)}</strong>
+                                    </div>
+                                    <div class="doc-header-right">
+                                        <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
+                                        <button class="doc-delete-btn" title="Map verwijderen" onclick="event.stopPropagation(); deleteDocFolder('${escapeHtml(verdiep.path)}', '${escapeHtml(verdiep.name)}', this)">&#x1F5D1;</button>
+                                    </div>
                                 </div>
-                                <div class="doc-header-right">
-                                    <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
-                                    ${verdiep.odoo_id ? `<button class="doc-delete-btn" title="Verdieping verwijderen" onclick="event.stopPropagation(); deleteDocItem('verdiep', '${verdiep.odoo_id}', 'Verdieping ${escapeHtml(String(verdiep.nummer))}', this)">&#x1F5D1;</button>` : ''}
-                                </div>
-                            </div>
-                            <div class="doc-verdiep-body open">
-                                ${verdiep.collectoren.map(col => {
-                                    const docPath = getDocPath(gebouw.naam, verdiep.nummer, col.nummer);
-                                    return `
+                                <div class="doc-verdiep-body open">
+                                    ${verdiep.collectoren.map(col => `
                                         <div class="doc-collector">
-                                            <div class="doc-collector-header" data-doc-path="${escapeHtml(docPath)}" onclick="toggleDocCollector(this)">
+                                            <div class="doc-collector-header" onclick="toggleDocCollector(this)">
                                                 <div class="doc-header-left">
                                                     <span class="doc-chevron">&#9654;</span>
                                                     <span class="doc-folder-icon">&#x1F4F7;</span>
-                                                    <span class="badge badge-collector">Col ${col.nummer}</span>
-                                                    <strong>${escapeHtml(col.naam || '')}</strong>
-                                                    <span class="doc-meta">${col.aantalKringen} kringen</span>
+                                                    <span class="badge badge-collector">Collector</span>
+                                                    <strong>${escapeHtml(col.name)}</strong>
                                                 </div>
                                                 <div class="doc-header-right">
-                                                    ${col.odoo_id ? `<button class="doc-delete-btn" title="Collector verwijderen" onclick="event.stopPropagation(); deleteDocItem('collector', '${col.odoo_id}', 'Collector ${col.nummer}', this)">&#x1F5D1;</button>` : ''}
+                                                    <button class="doc-delete-btn" title="Map verwijderen" onclick="event.stopPropagation(); deleteDocFolder('${escapeHtml(col.path)}', '${escapeHtml(col.name)}', this)">&#x1F5D1;</button>
                                                 </div>
                                             </div>
                                             <div class="doc-collector-body">
-                                                <div class="doc-upload-area">
-                                                    <label class="doc-upload-btn">
-                                                        <input type="file" accept="image/*" multiple
-                                                               onchange="uploadDocFiles(this, '${escapeHtml(docPath)}')"
-                                                               style="display:none">
-                                                        &#x1F4F7; Foto's uploaden
-                                                    </label>
-                                                    <span class="doc-upload-status"></span>
-                                                </div>
-                                                <div class="doc-thumbnails">
-                                                    <p class="doc-loading" style="color:#868e96;">Klik om foto's te laden.</p>
-                                                </div>
+                                                <p class="doc-folder-path">${escapeHtml(col.path)}</p>
                                             </div>
                                         </div>
-                                    `;
-                                }).join('')}
+                                    `).join('')}
+                                </div>
                             </div>
-                        </div>
-                    `).join('')}
+                        `).join('')}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
+        } catch (err) {
+            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+            container.innerHTML = `<p class="rv-empty">Kan servermappen niet laden: ${escapeHtml(err.message)}</p>`;
+        }
     }
 }
 

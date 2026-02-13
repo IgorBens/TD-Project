@@ -1301,6 +1301,13 @@ select:focus {
     margin-left: 4px;
 }
 
+.doc-folder-path {
+    font-size: 0.75rem;
+    color: #adb5bd;
+    font-family: monospace;
+    margin: 4px 14px;
+}
+
 /* Bodies - collapsible */
 .doc-gebouw-body,
 .doc-verdiep-body,
