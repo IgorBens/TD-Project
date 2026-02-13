@@ -99,21 +99,14 @@
     },
     {
       "parameters": {
-        "operation": "executeCommand",
         "command": "={{ $json.command }}",
         "options": {}
       },
       "id": "c1b2c3d4-0001-4000-8000-000000000008",
       "name": "Execute Cleanup",
-      "type": "n8n-nodes-base.ssh",
+      "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [1540, 300],
-      "credentials": {
-        "sshPassword": {
-          "id": "FILL_IN_SSH_CREDENTIAL_ID",
-          "name": "NAS SSH"
-        }
-      }
+      "position": [1540, 300]
     },
     {
       "parameters": {
