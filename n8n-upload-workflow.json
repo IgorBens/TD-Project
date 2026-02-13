@@ -3,9 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "POST",
         "path": "thermoduct-upload",
-        "responseMode": "responseNode",
         "formTitle": "Foto's uploaden",
         "formDescription": "Upload foto's voor deze collector",
         "formFields": {
@@ -26,7 +24,7 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [0, 300],
-      "webhookId": "thermoduct-upload"
+      "webhookId": "615f197c-5733-4bae-a032-4982ff10685b"
     },
     {
       "parameters": {
@@ -51,7 +49,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Verplaats geüploade bestanden naar de doelmap\nconst setup = $('Setup').first().json;\nconst formData = $('Form Trigger').first();\nconst files = formData.binary || {};\nconst targetDir = setup.targetDir;\n\nconst commands = [];\nlet fileCount = 0;\n\nfor (const [key, fileInfo] of Object.entries(files)) {\n  if (fileInfo.fileName) {\n    // n8n slaat uploads tijdelijk op, we moeten ze kopiëren\n    commands.push({\n      fileName: fileInfo.fileName,\n      mimeType: fileInfo.mimeType,\n      key\n    });\n    fileCount++;\n  }\n}\n\nreturn [{ json: { targetDir, fileCount, files: commands } }];"
+        "jsCode": "// Verplaats geüploade bestanden naar de doelmap\nconst setup = $('Setup').first().json;\nconst formData = $('Form Trigger').first();\nconst files = formData.binary || {};\nconst targetDir = setup.targetDir;\n\nconst commands = [];\nlet fileCount = 0;\n\nfor (const [key, fileInfo] of Object.entries(files)) {\n  if (fileInfo.fileName) {\n    commands.push({\n      fileName: fileInfo.fileName,\n      mimeType: fileInfo.mimeType,\n      key\n    });\n    fileCount++;\n  }\n}\n\nreturn [{ json: { targetDir, fileCount, files: commands } }];"
       },
       "id": "u1p2l3o4-0001-4000-8000-000000000004",
       "name": "Prep Files",
@@ -73,14 +71,16 @@
     },
     {
       "parameters": {
+        "operation": "completion",
         "respondWith": "text",
-        "responseBody": "={{ `Foto's succesvol geüpload naar ${$('Setup').first().json.folderPath}. U kunt dit venster sluiten.` }}",
+        "completionTitle": "Upload gelukt!",
+        "completionMessage": "Foto's zijn succesvol geüpload. U kunt dit venster sluiten.",
         "options": {}
       },
       "id": "u1p2l3o4-0001-4000-8000-000000000006",
-      "name": "Respond",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "name": "Form Ending",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
       "position": [1100, 300]
     }
   ],
@@ -107,7 +107,7 @@
     },
     "Save Files": {
       "main": [
-        [{ "node": "Respond", "type": "main", "index": 0 }]
+        [{ "node": "Form Ending", "type": "main", "index": 0 }]
       ]
     }
   },
