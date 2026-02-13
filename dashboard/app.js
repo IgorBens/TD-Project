@@ -209,6 +209,15 @@ function initApp() {
     btnAddGebouw.addEventListener('click', () => addGebouw());
     btnOpslaan.addEventListener('click', () => opslaan());
     btnLaden.addEventListener('click', () => ladenUitOdoo());
+
+    // Auto-load project vanuit URL parameter (?project=123)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlProjectId = urlParams.get('project');
+    if (urlProjectId && !isNaN(urlProjectId)) {
+        projectIdInput.value = urlProjectId;
+        setTimeout(() => ladenUitOdoo(), 100);
+    }
+
     document.getElementById('btnAddRol').addEventListener('click', () => addRol());
 
     // ===== Utility =====
@@ -808,6 +817,10 @@ function initApp() {
                 selectedProject.adres = projectAdres;
                 projectInfoAdres.textContent = projectAdres;
             }
+
+            // Update directe link
+            const directLink = document.getElementById('projectDirectLink');
+            directLink.href = `${window.location.origin}${window.location.pathname}?project=${selectedProject.id}`;
 
             // Toon project info sectie
             if (projectNaam || projectAdres) {
