@@ -210,11 +210,15 @@ function initApp() {
     btnOpslaan.addEventListener('click', () => opslaan());
     btnLaden.addEventListener('click', () => ladenUitOdoo());
 
-    // Auto-load project vanuit URL parameter (?project=123)
+    // Auto-load project vanuit URL parameter (?project=123 of ?search=S26316869)
     const urlParams = new URLSearchParams(window.location.search);
     const urlProjectId = urlParams.get('project');
+    const urlSearch = urlParams.get('search');
     if (urlProjectId && !isNaN(urlProjectId)) {
         projectIdInput.value = urlProjectId;
+        setTimeout(() => ladenUitOdoo(), 100);
+    } else if (urlSearch) {
+        projectIdInput.value = urlSearch;
         setTimeout(() => ladenUitOdoo(), 100);
     }
 
@@ -790,21 +794,38 @@ function initApp() {
 
     // ===== Load from Odoo =====
     async function ladenUitOdoo() {
-        const projectId = parseInt(projectIdInput.value);
-        if (!projectId) {
-            showStatus('Voer een project ID in.', 'error');
+        const inputVal = projectIdInput.value.trim();
+        if (!inputVal) {
+            showStatus('Voer een project ID of S-nummer in.', 'error');
             return;
         }
 
-        selectedProject = { id: projectId, naam: '', adres: '' };
+        // Detecteer of het een numeriek ID of een S-nummer is
+        const isNumeric = /^\d+$/.test(inputVal);
+        const queryParam = isNumeric
+            ? `project_id=${encodeURIComponent(inputVal)}`
+            : `search=${encodeURIComponent(inputVal)}`;
+
+        selectedProject = { id: isNumeric ? parseInt(inputVal) : null, naam: '', adres: '' };
         btnLaden.disabled = true;
         btnLaden.textContent = 'Laden...';
 
         try {
-            const res = await fetch(`${WEBHOOK_LOAD}?project_id=${selectedProject.id}`);
+            const res = await fetch(`${WEBHOOK_LOAD}?${queryParam}`);
             if (!res.ok) throw new Error(`Server antwoordde met status ${res.status}`);
 
             const data = await res.json();
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            // Als we via S-nummer zochten, haal het project_id uit het antwoord
+            if (!isNumeric && data.project_id) {
+                selectedProject.id = data.project_id;
+                // Update input veld met gevonden project ID
+                projectIdInput.value = data.project_id;
+            }
 
             // Update project info uit response (ondersteunt Odoo veldnamen)
             const projectNaam = data.naam || data.name || '';
