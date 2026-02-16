@@ -365,13 +365,18 @@ function initApp() {
         const { card, bodyId } = createCard('verdiep', 'Verdiep', `Verdieping ${verdiepLabel}`, odooId);
         const body = card.querySelector(`#${bodyId}`);
 
+        const randIsoVal = data?.randisolatie ?? '';
+
         body.innerHTML = `
             <div class="field-row cols-2">
                 <div>
                     <label>Verdieping</label>
                     <input type="number" class="verdiep-nummer" placeholder="bijv. 0" min="-5" value="${numInt}">
                 </div>
-                <div></div>
+                <div>
+                    <label>Randisolatie (m)</label>
+                    <input type="number" class="verdiep-randisolatie" placeholder="Omtrek in m" step="any" min="0" value="${randIsoVal}">
+                </div>
             </div>
             <div class="children-container" data-children="collectoren"></div>
             <button type="button" class="btn btn-add btn-add-child" onclick="addCollector(this)">+ Collector</button>
@@ -422,10 +427,9 @@ function initApp() {
         const { card, bodyId } = createCard('collector', 'Collector', titleText, odooId);
         const body = card.querySelector(`#${bodyId}`);
 
-        const drukVal = data?.druk ?? 4;
         const aantalVal = data?.aantalKringen ?? data?.kringen?.length ?? 0;
-        const randIsoVal = data?.randisolatie ?? '';
         const uitzetVal = data?.uitzetvoegen ?? '';
+        const systeemVal = data?.systeem || '';
 
         body.innerHTML = `
             <div class="field-row cols-4">
@@ -438,10 +442,18 @@ function initApp() {
                     <input type="text" class="collector-naam" placeholder="bijv. App. 3.1" value="${escapeHtml(naamVal)}">
                 </div>
                 <div>
-                    <label>Druk (bar)</label>
-                    <select class="collector-druk">
-                        <option value="4" ${drukVal == 4 ? 'selected' : ''}>4 bar</option>
-                        <option value="6" ${drukVal == 6 ? 'selected' : ''}>6 bar</option>
+                    <label>Systeem</label>
+                    <select class="collector-systeem">
+                        <option value="" ${systeemVal === '' ? 'selected' : ''}>-- Kies --</option>
+                        <option value="staalnet" ${systeemVal === 'staalnet' ? 'selected' : ''}>Staalnet</option>
+                        <option value="tacker" ${systeemVal === 'tacker' ? 'selected' : ''}>Tacker</option>
+                        <option value="fermacell" ${systeemVal === 'fermacell' ? 'selected' : ''}>Fermacell</option>
+                        <option value="warp" ${systeemVal === 'warp' ? 'selected' : ''}>Warp</option>
+                        <option value="slimfit" ${systeemVal === 'slimfit' ? 'selected' : ''}>Slimfit</option>
+                        <option value="ultrathin" ${systeemVal === 'ultrathin' ? 'selected' : ''}>Ultrathin</option>
+                        <option value="bka" ${systeemVal === 'bka' ? 'selected' : ''}>BKA</option>
+                        <option value="electrisch" ${systeemVal === 'electrisch' ? 'selected' : ''}>Electrisch</option>
+                        <option value="varieert" ${systeemVal === 'varieert' ? 'selected' : ''}>Varieert (per kring)</option>
                     </select>
                 </div>
                 <div>
@@ -449,14 +461,10 @@ function initApp() {
                     <input type="number" class="collector-aantal-kringen" placeholder="bijv. 5" min="0" value="${aantalVal}">
                 </div>
             </div>
-            <div class="field-row cols-3">
+            <div class="field-row cols-2">
                 <div>
                     <label>m&sup2; totaal</label>
                     <span class="collector-m2-totaal field-display">0.0</span>
-                </div>
-                <div>
-                    <label>Randisolatie (m)</label>
-                    <input type="number" class="collector-randisolatie" placeholder="Omtrek in m" step="any" min="0" value="${randIsoVal}">
                 </div>
                 <div>
                     <label>Uitzetvoegen (m)</label>
@@ -476,6 +484,16 @@ function initApp() {
         };
         nummerInput.addEventListener('input', updateTitle);
         naamInput.addEventListener('input', updateTitle);
+
+        // Cascade systeem van collector naar kringen
+        const systeemSelect = body.querySelector('.collector-systeem');
+        systeemSelect.addEventListener('change', () => {
+            const val = systeemSelect.value;
+            if (val && val !== 'varieert') {
+                // Zet alle kringen op dit systeem
+                body.querySelectorAll('.kring-systeem').forEach(ks => { ks.value = val; });
+            }
+        });
 
         const aantalInput = body.querySelector('.collector-aantal-kringen');
         aantalInput.addEventListener('change', () => {
@@ -534,6 +552,12 @@ function initApp() {
                         <option value="" ${systeemVal === '' ? 'selected' : ''}>-- Kies --</option>
                         <option value="staalnet" ${systeemVal === 'staalnet' ? 'selected' : ''}>Staalnet</option>
                         <option value="tacker" ${systeemVal === 'tacker' ? 'selected' : ''}>Tacker</option>
+                        <option value="fermacell" ${systeemVal === 'fermacell' ? 'selected' : ''}>Fermacell</option>
+                        <option value="warp" ${systeemVal === 'warp' ? 'selected' : ''}>Warp</option>
+                        <option value="slimfit" ${systeemVal === 'slimfit' ? 'selected' : ''}>Slimfit</option>
+                        <option value="ultrathin" ${systeemVal === 'ultrathin' ? 'selected' : ''}>Ultrathin</option>
+                        <option value="bka" ${systeemVal === 'bka' ? 'selected' : ''}>BKA</option>
+                        <option value="electrisch" ${systeemVal === 'electrisch' ? 'selected' : ''}>Electrisch</option>
                     </select>
                 </div>
                 <div>
@@ -600,6 +624,7 @@ function initApp() {
                     odoo_id: vCard.dataset.odooId || null,
                     stage: STAGES.VERDIEPEN,
                     nummer: formatVerdiep(vBody.querySelector('.verdiep-nummer').value),
+                    randisolatie: parseFloat(vBody.querySelector('.verdiep-randisolatie').value) || 0,
                     collectoren: []
                 };
 
@@ -611,9 +636,8 @@ function initApp() {
                         stage: STAGES.COLLECTOREN,
                         nummer: parseInt(cBody.querySelector('.collector-nummer').value) || 0,
                         naam: cBody.querySelector('.collector-naam').value.trim(),
-                        druk: parseFloat(cBody.querySelector('.collector-druk').value),
+                        systeem: cBody.querySelector('.collector-systeem').value,
                         aantalKringen: parseInt(cBody.querySelector('.collector-aantal-kringen').value) || 0,
-                        randisolatie: parseFloat(cBody.querySelector('.collector-randisolatie').value) || 0,
                         uitzetvoegen: parseFloat(cBody.querySelector('.collector-uitzetvoegen').value) || 0,
                         kringen: []
                     };
@@ -653,10 +677,10 @@ function initApp() {
             snap[gKey] = { naam: g.naam };
             (g.verdiepen || []).forEach((v, vi) => {
                 const vKey = v.odoo_id || `new_v_${gi}_${vi}`;
-                snap[vKey] = { nummer: v.nummer };
+                snap[vKey] = { nummer: v.nummer, randisolatie: v.randisolatie };
                 (v.collectoren || []).forEach((c, ci) => {
                     const cKey = c.odoo_id || `new_c_${gi}_${vi}_${ci}`;
-                    snap[cKey] = { nummer: c.nummer, naam: c.naam, druk: c.druk, randisolatie: c.randisolatie, uitzetvoegen: c.uitzetvoegen };
+                    snap[cKey] = { nummer: c.nummer, naam: c.naam, systeem: c.systeem, uitzetvoegen: c.uitzetvoegen };
                     (c.kringen || []).forEach((k, ki) => {
                         const kKey = k.odoo_id || `new_k_${gi}_${vi}_${ci}_${ki}`;
                         snap[kKey] = { nummer: k.nummer, systeem: k.systeem, legpatroon: k.legpatroon, lengte: k.lengte, m2: k.m2 };
@@ -682,12 +706,12 @@ function initApp() {
             (g.verdiepen || []).forEach((v, vi) => {
                 const vKey = v.odoo_id || `new_v_${gi}_${vi}`;
                 const prevV = snap[vKey];
-                v.dirty = !prevV || prevV.nummer !== v.nummer;
+                v.dirty = !prevV || prevV.nummer !== v.nummer || prevV.randisolatie !== v.randisolatie;
 
                 (v.collectoren || []).forEach((c, ci) => {
                     const cKey = c.odoo_id || `new_c_${gi}_${vi}_${ci}`;
                     const prevC = snap[cKey];
-                    c.dirty = !prevC || prevC.nummer !== c.nummer || prevC.naam !== c.naam || prevC.druk !== c.druk || prevC.randisolatie !== c.randisolatie || prevC.uitzetvoegen !== c.uitzetvoegen;
+                    c.dirty = !prevC || prevC.nummer !== c.nummer || prevC.naam !== c.naam || prevC.systeem !== c.systeem || prevC.uitzetvoegen !== c.uitzetvoegen;
 
                     (c.kringen || []).forEach((k, ki) => {
                         const kKey = k.odoo_id || `new_k_${gi}_${vi}_${ci}_${ki}`;
@@ -927,8 +951,7 @@ function initApp() {
                         gebouw: gebouw.naam,
                         verdiep: verdiep.nummer,
                         nummer: collector.nummer,
-                        druk: collector.druk,
-                        randisolatie: collector.randisolatie,
+                        systeem: collector.systeem,
                         uitzetvoegen: collector.uitzetvoegen,
                         uniqueKey: prefix,
                         kringen: collector.kringen.map(k => ({
@@ -1115,7 +1138,7 @@ function initApp() {
                             <div>
                                 <span class="badge badge-collector">Collector ${col.nummer}</span>
                                 <strong>${col.label}</strong>
-                                <span class="rv-collector-meta">${col.gebouw} &middot; ${col.verdiep} &middot; ${col.druk} bar</span>
+                                <span class="rv-collector-meta">${col.gebouw} &middot; ${col.verdiep}${col.systeem ? ' &middot; ' + col.systeem : ''}</span>
                             </div>
                             <span class="rv-collector-totaal">${totaalLengte} m totaal</span>
                         </div>
@@ -1356,7 +1379,7 @@ function initApp() {
                                                 <input type="checkbox" class="vd-checkbox" onchange="toggleVdCollector(this)">
                                                 <span class="badge badge-collector">Col ${col.nummer}</span>
                                                 <strong>${escapeHtml(col.naam || '')}</strong>
-                                                <span class="vd-meta">${col.druk} bar &middot; ${col.aantalKringen} kringen</span>
+                                                <span class="vd-meta">${col.aantalKringen} kringen</span>
                                             </label>
                                         </div>
                                         <div class="vd-children vd-kringen-grid">
