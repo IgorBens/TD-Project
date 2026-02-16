@@ -1,5 +1,5 @@
 // ===== Configuration =====
-const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
+const WEBHOOK_BASE = 'http://46.225.76.46/n8n/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
@@ -8,7 +8,7 @@ const WEBHOOK_FOLDER_DELETE = WEBHOOK_BASE + '/thermoduct-folder-delete';
 const WEBHOOK_FILES = WEBHOOK_BASE + '/thermoduct-files';
 const WEBHOOK_SERVE_FILE = WEBHOOK_BASE + '/thermoduct-serve-file';
 const WEBHOOK_FILE_DELETE = WEBHOOK_BASE + '/thermoduct-file-delete';
-const WEBHOOK_UPLOAD_FORM = 'http://46.225.76.46:5678/form/c939dab0-c13d-4f51-95b7-50ddc4068880';
+const WEBHOOK_UPLOAD_FORM = 'http://46.225.76.46/n8n/form/c939dab0-c13d-4f51-95b7-50ddc4068880';
 
 // Odoo stage names (must match Odoo project stages)
 const STAGES = {
