@@ -1,12 +1,14 @@
 // ===== Configuration =====
-const WEBHOOK_BASE = 'http://46.225.76.46:5678/webhook';
+const WEBHOOK_BASE = 'http://46.225.76.46/n8n/webhook';
 const WEBHOOK_AUTH = WEBHOOK_BASE + '/thermoduct-auth';
 const WEBHOOK_SAVE = WEBHOOK_BASE + '/thermoduct-dashboard';
 const WEBHOOK_LOAD = WEBHOOK_BASE + '/thermoduct-load';
-const WEBHOOK_DOCS_UPLOAD = WEBHOOK_BASE + '/thermoduct-docs-upload';
-const WEBHOOK_DOCS_LIST = WEBHOOK_BASE + '/thermoduct-docs-list';
-const WEBHOOK_DOCS_DELETE = WEBHOOK_BASE + '/thermoduct-docs-delete';
-const WEBHOOK_DOCS_FILE = WEBHOOK_BASE + '/thermoduct-docs-file';
+const WEBHOOK_FOLDERS = WEBHOOK_BASE + '/thermoduct-folders';
+const WEBHOOK_FOLDER_DELETE = WEBHOOK_BASE + '/thermoduct-folder-delete';
+const WEBHOOK_FILES = WEBHOOK_BASE + '/thermoduct-files';
+const WEBHOOK_SERVE_FILE = WEBHOOK_BASE + '/thermoduct-serve-file';
+const WEBHOOK_FILE_DELETE = WEBHOOK_BASE + '/thermoduct-file-delete';
+const WEBHOOK_UPLOAD_FORM = 'http://46.225.76.46/n8n/form/c939dab0-c13d-4f51-95b7-50ddc4068880';
 
 // Odoo stage names (must match Odoo project stages)
 const STAGES = {
@@ -26,6 +28,7 @@ let rollen = [];
 let rolCounter = 0;
 let selectedProject = null;
 let appInitialized = false;
+let lastSavedSnapshot = null; // Snapshot for dirty tracking
 
 // Rolverdeling sessions: array of locked sessions
 // Each session: { rollen: [...], toewijzingen: { kringCode: rolId }, locked: true }
@@ -179,8 +182,8 @@ function initApp() {
     window.toggleDocGebouw = toggleDocGebouw;
     window.toggleDocVerdiep = toggleDocVerdiep;
     window.toggleDocCollector = toggleDocCollector;
-    window.uploadDocFiles = uploadDocFiles;
-    window.deleteDocFile = deleteDocFile;
+    window.deleteDocFolder = deleteDocFolder;
+    window.openUploadForm = openUploadForm;
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -206,6 +209,15 @@ function initApp() {
     btnAddGebouw.addEventListener('click', () => addGebouw());
     btnOpslaan.addEventListener('click', () => opslaan());
     btnLaden.addEventListener('click', () => ladenUitOdoo());
+
+    // Auto-load project vanuit URL parameter (?project=123)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlProjectId = urlParams.get('project');
+    if (urlProjectId && !isNaN(urlProjectId)) {
+        projectIdInput.value = urlProjectId;
+        setTimeout(() => ladenUitOdoo(), 100);
+    }
+
     document.getElementById('btnAddRol').addEventListener('click', () => addRol());
 
     // ===== Utility =====
@@ -254,6 +266,7 @@ function initApp() {
                 body: JSON.stringify({
                     action: 'delete',
                     project_id: selectedProject.id,
+                    project_naam: selectedProject.naam || '',
                     odoo_ids: odooIds
                 })
             });
@@ -627,6 +640,62 @@ function initApp() {
         return { project_id: projectId, project_naam: projectNaam, gebouwen };
     }
 
+    // ===== Dirty tracking =====
+    function createSnapshot(data) {
+        // Create a flat lookup of item values keyed by odoo_id
+        const snap = {};
+        (data.gebouwen || []).forEach((g, gi) => {
+            const gKey = g.odoo_id || `new_g_${gi}`;
+            snap[gKey] = { naam: g.naam };
+            (g.verdiepen || []).forEach((v, vi) => {
+                const vKey = v.odoo_id || `new_v_${gi}_${vi}`;
+                snap[vKey] = { nummer: v.nummer };
+                (v.collectoren || []).forEach((c, ci) => {
+                    const cKey = c.odoo_id || `new_c_${gi}_${vi}_${ci}`;
+                    snap[cKey] = { nummer: c.nummer, naam: c.naam, druk: c.druk, randisolatie: c.randisolatie, uitzetvoegen: c.uitzetvoegen };
+                    (c.kringen || []).forEach((k, ki) => {
+                        const kKey = k.odoo_id || `new_k_${gi}_${vi}_${ci}_${ki}`;
+                        snap[kKey] = { nummer: k.nummer, systeem: k.systeem, legpatroon: k.legpatroon, lengte: k.lengte, m2: k.m2 };
+                    });
+                });
+            });
+        });
+        return snap;
+    }
+
+    function markDirtyItems(data) {
+        if (!lastSavedSnapshot) {
+            // No snapshot = first save, everything is dirty
+            return data;
+        }
+        const snap = lastSavedSnapshot;
+        const marked = JSON.parse(JSON.stringify(data));
+        marked.gebouwen.forEach((g, gi) => {
+            const gKey = g.odoo_id || `new_g_${gi}`;
+            const prev = snap[gKey];
+            g.dirty = !prev || prev.naam !== g.naam;
+
+            (g.verdiepen || []).forEach((v, vi) => {
+                const vKey = v.odoo_id || `new_v_${gi}_${vi}`;
+                const prevV = snap[vKey];
+                v.dirty = !prevV || prevV.nummer !== v.nummer;
+
+                (v.collectoren || []).forEach((c, ci) => {
+                    const cKey = c.odoo_id || `new_c_${gi}_${vi}_${ci}`;
+                    const prevC = snap[cKey];
+                    c.dirty = !prevC || prevC.nummer !== c.nummer || prevC.naam !== c.naam || prevC.druk !== c.druk || prevC.randisolatie !== c.randisolatie || prevC.uitzetvoegen !== c.uitzetvoegen;
+
+                    (c.kringen || []).forEach((k, ki) => {
+                        const kKey = k.odoo_id || `new_k_${gi}_${vi}_${ci}_${ki}`;
+                        const prevK = snap[kKey];
+                        k.dirty = !prevK || prevK.nummer !== k.nummer || prevK.systeem !== k.systeem || prevK.legpatroon !== k.legpatroon || prevK.lengte !== k.lengte || prevK.m2 !== k.m2;
+                    });
+                });
+            });
+        });
+        return marked;
+    }
+
     function validate(data) {
         if (!data.project_id) return 'Voer eerst een project ID in en klik op Laden.';
         if (data.gebouwen.length === 0) return 'Voeg minstens één gebouw toe.';
@@ -654,6 +723,9 @@ function initApp() {
             return;
         }
 
+        // Mark dirty items based on snapshot comparison
+        const markedData = markDirtyItems(data);
+
         btnOpslaan.disabled = true;
         btnOpslaan.textContent = 'Verzenden...';
 
@@ -661,7 +733,7 @@ function initApp() {
             const response = await authFetch(WEBHOOK_SAVE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'save', ...data })
+                body: JSON.stringify({ action: 'save', ...markedData })
             });
 
             if (!response.ok) {
@@ -672,6 +744,9 @@ function initApp() {
             if (result?.gebouwen) {
                 updateOdooIds(result.gebouwen);
             }
+
+            // Update snapshot after successful save
+            lastSavedSnapshot = createSnapshot(collectData());
 
             showStatus('Data succesvol opgeslagen in Odoo!', 'success');
         } catch (err) {
@@ -743,6 +818,10 @@ function initApp() {
                 projectInfoAdres.textContent = projectAdres;
             }
 
+            // Update directe link
+            const directLink = document.getElementById('projectDirectLink');
+            directLink.href = `${window.location.origin}${window.location.pathname}?project=${selectedProject.id}`;
+
             // Toon project info sectie
             if (projectNaam || projectAdres) {
                 projectInfoEl.classList.remove('hidden');
@@ -754,6 +833,9 @@ function initApp() {
             if (data.gebouwen && Array.isArray(data.gebouwen)) {
                 data.gebouwen.forEach(g => addGebouw(g));
             }
+
+            // Store snapshot for dirty tracking
+            lastSavedSnapshot = createSnapshot(collectData());
 
             showStatus(`Project "${selectedProject.naam}" geladen met ${data.gebouwen?.length || 0} gebouw(en).`, 'success');
         } catch (err) {
@@ -1270,13 +1352,7 @@ function initApp() {
     // =============================================
 
     // Cache of loaded files per collector path
-    const docCache = {};
 
-    function getDocPath(gebouwNaam, verdiepNr, collectorNr) {
-        // Sanitize names for path use
-        const safe = str => String(str).replace(/[^a-zA-Z0-9._-]/g, '_');
-        return `${safe(gebouwNaam)}/${safe(verdiepNr)}/Collector_${safe(collectorNr)}`;
-    }
 
     function toggleDocGebouw(headerEl) {
         const body = headerEl.nextElementSibling;
@@ -1300,215 +1376,341 @@ function initApp() {
 
         // Load files when opening
         if (body.classList.contains('open')) {
-            const path = headerEl.dataset.docPath;
-            if (path && !docCache[path]) {
-                loadDocFiles(path, body.querySelector('.doc-thumbnails'));
+            const folderPath = headerEl.dataset.folderPath;
+            if (folderPath) {
+                loadDocFiles(folderPath, body.querySelector('.doc-files-list'));
             }
         }
     }
 
-    async function loadDocFiles(path, thumbnailsEl) {
+    async function loadDocFiles(folderPath, filesListEl) {
         if (!selectedProject?.id) return;
-        thumbnailsEl.innerHTML = '<p class="doc-loading">Laden...</p>';
+
+        filesListEl.innerHTML = '<p class="doc-loading">Bestanden laden...</p>';
 
         try {
-            const res = await fetch(`${WEBHOOK_DOCS_LIST}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}`);
-            if (!res.ok) throw new Error('Fout bij laden');
-            const files = await res.json();
+            const res = await fetch(`${WEBHOOK_FILES}?project_id=${selectedProject.id}&folder_path=${encodeURIComponent(folderPath)}`);
+            const data = await res.json();
 
-            docCache[path] = files;
-            renderThumbnails(path, files, thumbnailsEl);
+            if (!data.success || !data.exists || !data.files || data.files.length === 0) {
+                filesListEl.innerHTML = '<p class="doc-loading">Nog geen bestanden.</p>';
+                return;
+            }
+
+            filesListEl.innerHTML = data.files.map(file => {
+                const sizeKB = Math.round(file.size / 1024);
+                const isImage = /\.(jpg|jpeg|png|webp|heic|gif|bmp)$/i.test(file.name);
+                const thumbUrl = isImage
+                    ? `${WEBHOOK_SERVE_FILE}?project_id=${selectedProject.id}&folder_path=${encodeURIComponent(folderPath)}&file_name=${encodeURIComponent(file.name)}`
+                    : '';
+                const fileUrl = `${WEBHOOK_SERVE_FILE}?project_id=${selectedProject.id}&folder_path=${encodeURIComponent(folderPath)}&file_name=${encodeURIComponent(file.name)}`;
+                return `
+                    <div class="doc-file-item${isImage ? ' doc-file-item--image' : ''}" ${isImage ? `data-lightbox-url="${fileUrl}" data-file-name="${escapeHtml(file.name)}"` : ''} style="${isImage ? 'cursor:pointer' : ''}">
+                        ${isImage
+                            ? `<img class="doc-file-thumb" src="${thumbUrl}" alt="" loading="lazy">`
+                            : `<a href="${fileUrl}" target="_blank" class="doc-file-icon" style="text-decoration:none">&#x1F4C4;</a>`}
+                        <span class="doc-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                        <span class="doc-file-size">${sizeKB} KB</span>
+                        <button class="doc-file-delete" data-folder-path="${escapeHtml(folderPath)}" data-file-name="${escapeHtml(file.name)}" title="Verwijder bestand">&#x1F5D1;</button>
+                    </div>
+                `;
+            }).join('');
         } catch (err) {
-            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Geen bestanden of niet verbonden.</p>';
-            docCache[path] = [];
+            filesListEl.innerHTML = `<p class="doc-loading">Fout bij laden: ${escapeHtml(err.message)}</p>`;
         }
     }
 
-    function renderThumbnails(path, files, thumbnailsEl) {
-        if (!files || files.length === 0) {
-            thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
-            return;
+    function openUploadForm(projectId, folderPath) {
+        const url = `${WEBHOOK_UPLOAD_FORM}?project_id=${encodeURIComponent(projectId)}&folder_path=${encodeURIComponent(folderPath)}`;
+        const popup = window.open(url, '_blank', 'width=500,height=400');
+        // Wanneer het popup venster sluit, herlaad bestanden
+        if (popup) {
+            const timer = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(timer);
+                    // Herlaad alle geopende collector bodies
+                    document.querySelectorAll('.doc-collector-header').forEach(header => {
+                        const body = header.nextElementSibling;
+                        if (body && body.classList.contains('open')) {
+                            const fp = header.dataset.folderPath;
+                            if (fp) loadDocFiles(fp, body.querySelector('.doc-files-list'));
+                        }
+                    });
+                }
+            }, 500);
         }
-
-        thumbnailsEl.innerHTML = files.map(file => `
-            <div class="doc-thumb">
-                <img src="${WEBHOOK_DOCS_FILE}?project_id=${selectedProject.id}&path=${encodeURIComponent(path)}&file=${encodeURIComponent(file.name)}"
-                     alt="${escapeHtml(file.name)}"
-                     loading="lazy"
-                     onclick="window.open(this.src, '_blank')">
-                <div class="doc-thumb-info">
-                    <span class="doc-thumb-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
-                    <button type="button" class="btn btn-remove doc-thumb-delete"
-                            onclick="deleteDocFile('${escapeHtml(path)}', '${escapeHtml(file.name)}', this)"
-                            title="Verwijderen">&#x2715;</button>
-                </div>
-            </div>
-        `).join('');
     }
 
-    async function uploadDocFiles(input, path) {
-        if (!selectedProject?.id || !input.files.length) return;
-
-        const collectorBody = input.closest('.doc-collector-body');
-        const thumbnailsEl = collectorBody.querySelector('.doc-thumbnails');
-        const statusEl = collectorBody.querySelector('.doc-upload-status');
-
-        const files = Array.from(input.files);
-        statusEl.textContent = `Uploaden: 0/${files.length}...`;
-        statusEl.classList.add('active');
-
-        let uploaded = 0;
-        for (const file of files) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('project_id', selectedProject.id);
-            formData.append('path', path);
-
-            try {
-                const res = await fetch(WEBHOOK_DOCS_UPLOAD, {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!res.ok) throw new Error('Upload failed');
-                uploaded++;
-                statusEl.textContent = `Uploaden: ${uploaded}/${files.length}...`;
-            } catch (err) {
-                console.error('Upload error:', err);
-            }
-        }
-
-        statusEl.textContent = `${uploaded} bestand(en) geupload.`;
-        setTimeout(() => {
-            statusEl.classList.remove('active');
-            statusEl.textContent = '';
-        }, 3000);
-
-        // Refresh file list
-        delete docCache[path];
-        await loadDocFiles(path, thumbnailsEl);
-
-        // Reset input
-        input.value = '';
-    }
-
-    async function deleteDocFile(path, fileName, btn) {
-        if (!confirm(`"${fileName}" verwijderen?`)) return;
+    async function deleteDocFile(folderPath, fileName, btnEl) {
         if (!selectedProject?.id) return;
 
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+
         try {
-            await fetch(WEBHOOK_DOCS_DELETE, {
+            const res = await authFetch(WEBHOOK_FILE_DELETE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     project_id: selectedProject.id,
-                    path: path,
-                    file: fileName
+                    folder_path: folderPath,
+                    file_name: fileName
                 })
             });
 
-            // Remove from cache and re-render
-            const thumbEl = btn.closest('.doc-thumb');
-            const thumbnailsEl = thumbEl.parentElement;
-            thumbEl.remove();
-
-            if (docCache[path]) {
-                docCache[path] = docCache[path].filter(f => f.name !== fileName);
-                if (docCache[path].length === 0) {
-                    thumbnailsEl.innerHTML = '<p class="doc-loading" style="color:#868e96;">Nog geen foto\'s geupload.</p>';
+            const result = await res.json();
+            if (result.success) {
+                showStatus(result.message, 'success');
+                // Verwijder het bestand-item uit de lijst
+                const fileItem = btnEl.closest('.doc-file-item');
+                const filesList = fileItem?.closest('.doc-files-list');
+                fileItem?.remove();
+                // Als er geen bestanden meer zijn, toon melding
+                if (filesList && !filesList.querySelector('.doc-file-item')) {
+                    filesList.innerHTML = '<p class="doc-loading">Nog geen bestanden.</p>';
                 }
+            } else {
+                showStatus(result.message || 'Verwijderen mislukt.', 'error');
+                btnEl.disabled = false;
+                btnEl.textContent = '\u{1F5D1}';
             }
         } catch (err) {
-            console.error('Delete error:', err);
+            showStatus(`Fout bij verwijderen: ${err.message}`, 'error');
+            btnEl.disabled = false;
+            btnEl.textContent = '\u{1F5D1}';
         }
     }
 
-    function renderDocumenten() {
-        const data = collectData();
+    async function deleteDocFolder(folderPath, label, btnEl) {
+        if (!confirm(`Map "${label}" en alle inhoud verwijderen van de server?`)) return;
+        if (!selectedProject?.id) return;
+
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+
+        try {
+            const res = await authFetch(WEBHOOK_FOLDER_DELETE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: selectedProject.id,
+                    folder_path: folderPath
+                })
+            });
+
+            const result = await res.json();
+            if (result.success) {
+                showStatus(result.message, 'success');
+                renderDocumenten(); // Herlaad van server
+            } else {
+                showStatus(result.message || 'Verwijderen mislukt.', 'error');
+                btnEl.disabled = false;
+                btnEl.textContent = '\u{1F5D1}';
+            }
+        } catch (err) {
+            showStatus(`Fout bij verwijderen: ${err.message}`, 'error');
+            btnEl.disabled = false;
+            btnEl.textContent = '\u{1F5D1}';
+        }
+    }
+
+    async function renderDocumenten() {
         const container = document.getElementById('docContainer');
         const statusText = document.getElementById('docStatusText');
 
         if (!selectedProject?.id) {
             statusText.textContent = 'Laad een project om documenten te beheren.';
-            container.innerHTML = '<p class="rv-empty">Laad een project en vul de invoer tab in om de documentenstructuur te zien.</p>';
+            container.innerHTML = '<p class="rv-empty">Laad een project om de servermappen te bekijken.</p>';
             return;
         }
 
-        if (!data.gebouwen || data.gebouwen.length === 0) {
-            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
-            container.innerHTML = '<p class="rv-empty">Vul eerst de invoer tab in om de mapstructuur te genereren.</p>';
-            return;
-        }
+        // Toon loading state
+        statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — mappen laden...`;
+        container.innerHTML = '<p class="rv-empty">Mappen ophalen van server...</p>';
 
-        // Count collectors
-        let totalCollectors = 0;
-        data.gebouwen.forEach(g => g.verdiepen.forEach(v => { totalCollectors += v.collectoren.length; }));
-        statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — ${totalCollectors} collector(en)`;
+        try {
+            const res = await fetch(`${WEBHOOK_FOLDERS}?project_id=${selectedProject.id}`);
+            const data = await res.json();
 
-        // Clear cache on re-render
-        Object.keys(docCache).forEach(k => delete docCache[k]);
+            if (!data.success) {
+                statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+                container.innerHTML = `<p class="rv-empty">Fout: ${escapeHtml(data.error || 'Kan mappen niet laden.')}</p>`;
+                return;
+            }
 
-        container.innerHTML = data.gebouwen.map(gebouw => `
-            <div class="doc-gebouw">
-                <div class="doc-gebouw-header" onclick="toggleDocGebouw(this)">
-                    <div class="doc-header-left">
-                        <span class="doc-chevron open">&#9654;</span>
-                        <span class="doc-folder-icon">&#x1F4C1;</span>
-                        <span class="badge badge-blok">Gebouw</span>
-                        <strong>${escapeHtml(gebouw.naam || 'Naamloos')}</strong>
+            if (!data.exists || !data.tree || data.tree.length === 0) {
+                statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+                container.innerHTML = '<p class="rv-empty">Nog geen mappen op de server. Sla eerst data op via de Invoer tab.</p>';
+                return;
+            }
+
+            // Bouw lookup voor collector namen vanuit invoerdata
+            const invoerData = collectData();
+            const collectorNaamLookup = {};
+            (invoerData.gebouwen || []).forEach(g => {
+                (g.verdiepen || []).forEach(v => {
+                    (v.collectoren || []).forEach(c => {
+                        const key = `${g.naam}/verdiep_${v.nummer}/collector_${c.nummer}`;
+                        if (c.naam) collectorNaamLookup[key] = c.naam;
+                    });
+                });
+            });
+
+            // Tel totalen
+            let totalVerdiepen = 0;
+            let totalCollectoren = 0;
+            data.tree.forEach(g => {
+                totalVerdiepen += g.verdiepen.length;
+                g.verdiepen.forEach(v => { totalCollectoren += v.collectoren.length; });
+            });
+            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id} — ${data.tree.length} gebouw(en), ${totalVerdiepen} verdiep(en), ${totalCollectoren} collector(en)`;
+
+            container.innerHTML = data.tree.map(gebouw => `
+                <div class="doc-gebouw">
+                    <div class="doc-gebouw-header" onclick="toggleDocGebouw(this)">
+                        <div class="doc-header-left">
+                            <span class="doc-chevron open">&#9654;</span>
+                            <span class="doc-folder-icon">&#x1F4C1;</span>
+                            <span class="badge badge-blok">Gebouw</span>
+                            <strong>${escapeHtml(gebouw.name)}</strong>
+                        </div>
+                        <div class="doc-header-right">
+                            <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
+                            <button class="doc-delete-btn" title="Map verwijderen" onclick="event.stopPropagation(); deleteDocFolder('${escapeHtml(gebouw.path)}', '${escapeHtml(gebouw.name)}', this)">&#x1F5D1;</button>
+                        </div>
                     </div>
-                    <span class="doc-count">${gebouw.verdiepen.length} verdiep(en)</span>
-                </div>
-                <div class="doc-gebouw-body open">
-                    ${gebouw.verdiepen.map(verdiep => `
-                        <div class="doc-verdiep">
-                            <div class="doc-verdiep-header" onclick="toggleDocVerdiep(this)">
-                                <div class="doc-header-left">
-                                    <span class="doc-chevron open">&#9654;</span>
-                                    <span class="doc-folder-icon">&#x1F4C2;</span>
-                                    <span class="badge badge-verdiep">Verdiep</span>
-                                    <strong>${verdiep.nummer}</strong>
+                    <div class="doc-gebouw-body open">
+                        ${gebouw.verdiepen.map(verdiep => `
+                            <div class="doc-verdiep">
+                                <div class="doc-verdiep-header" onclick="toggleDocVerdiep(this)">
+                                    <div class="doc-header-left">
+                                        <span class="doc-chevron open">&#9654;</span>
+                                        <span class="doc-folder-icon">&#x1F4C2;</span>
+                                        <span class="badge badge-verdiep">Verdiep</span>
+                                        <strong>${escapeHtml(verdiep.name)}</strong>
+                                    </div>
+                                    <div class="doc-header-right">
+                                        <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
+                                        <button class="doc-delete-btn" title="Map verwijderen" onclick="event.stopPropagation(); deleteDocFolder('${escapeHtml(verdiep.path)}', '${escapeHtml(verdiep.name)}', this)">&#x1F5D1;</button>
+                                    </div>
                                 </div>
-                                <span class="doc-count">${verdiep.collectoren.length} collector(en)</span>
-                            </div>
-                            <div class="doc-verdiep-body open">
-                                ${verdiep.collectoren.map(col => {
-                                    const docPath = getDocPath(gebouw.naam, verdiep.nummer, col.nummer);
-                                    return `
+                                <div class="doc-verdiep-body open">
+                                    ${verdiep.collectoren.map(col => {
+                                        const lookupKey = `${gebouw.name}/${verdiep.name}/${col.name}`;
+                                        const colNaam = collectorNaamLookup[lookupKey];
+                                        const displayName = colNaam ? `${col.name} — ${colNaam}` : col.name;
+                                        return `
                                         <div class="doc-collector">
-                                            <div class="doc-collector-header" data-doc-path="${escapeHtml(docPath)}" onclick="toggleDocCollector(this)">
+                                            <div class="doc-collector-header" data-folder-path="${escapeHtml(col.path)}" onclick="toggleDocCollector(this)">
                                                 <div class="doc-header-left">
                                                     <span class="doc-chevron">&#9654;</span>
                                                     <span class="doc-folder-icon">&#x1F4F7;</span>
-                                                    <span class="badge badge-collector">Col ${col.nummer}</span>
-                                                    <strong>${escapeHtml(col.naam || '')}</strong>
-                                                    <span class="doc-meta">${col.aantalKringen} kringen</span>
+                                                    <span class="badge badge-collector">Collector</span>
+                                                    <strong>${escapeHtml(displayName)}</strong>
+                                                </div>
+                                                <div class="doc-header-right">
+                                                    <button class="doc-upload-btn" title="Foto's uploaden" onclick="event.stopPropagation(); openUploadForm('${selectedProject.id}', '${escapeHtml(col.path)}')">&#x1F4F7; Upload</button>
+                                                    <button class="doc-delete-btn" title="Map verwijderen" onclick="event.stopPropagation(); deleteDocFolder('${escapeHtml(col.path)}', '${escapeHtml(col.name)}', this)">&#x1F5D1;</button>
                                                 </div>
                                             </div>
                                             <div class="doc-collector-body">
-                                                <div class="doc-upload-area">
-                                                    <label class="doc-upload-btn">
-                                                        <input type="file" accept="image/*" multiple
-                                                               onchange="uploadDocFiles(this, '${escapeHtml(docPath)}')"
-                                                               style="display:none">
-                                                        &#x1F4F7; Foto's uploaden
-                                                    </label>
-                                                    <span class="doc-upload-status"></span>
-                                                </div>
-                                                <div class="doc-thumbnails">
-                                                    <p class="doc-loading" style="color:#868e96;">Klik om foto's te laden.</p>
+                                                <div class="doc-files-list">
+                                                    <p class="doc-loading">Klik om bestanden te laden...</p>
                                                 </div>
                                             </div>
                                         </div>
-                                    `;
-                                }).join('')}
+                                    `}).join('')}
+                                </div>
                             </div>
-                        </div>
-                    `).join('')}
+                        `).join('')}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
+        } catch (err) {
+            statusText.textContent = `Project ${selectedProject.naam || selectedProject.id}`;
+            container.innerHTML = `<p class="rv-empty">Kan servermappen niet laden: ${escapeHtml(err.message)}</p>`;
+        }
     }
+
+    // Delegate click on file delete buttons
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.doc-file-delete');
+        if (!btn) return;
+        e.stopPropagation();
+        const folderPath = btn.dataset.folderPath;
+        const fileName = btn.dataset.fileName;
+        if (folderPath && fileName) {
+            deleteDocFile(folderPath, fileName, btn);
+        }
+    });
 }
+
+// ===== Lightbox =====
+(function() {
+    const overlay = document.getElementById('lightboxOverlay');
+    const img = document.getElementById('lightboxImg');
+    const caption = document.getElementById('lightboxCaption');
+    const closeBtn = document.getElementById('lightboxClose');
+    const prevBtn = document.getElementById('lightboxPrev');
+    const nextBtn = document.getElementById('lightboxNext');
+    let currentItems = [];
+    let currentIndex = 0;
+
+    function openLightbox(items, index) {
+        currentItems = items;
+        currentIndex = index;
+        showCurrent();
+        overlay.classList.add('active');
+    }
+
+    function closeLightbox() {
+        overlay.classList.remove('active');
+    }
+
+    function showCurrent() {
+        const item = currentItems[currentIndex];
+        img.src = item.url;
+        caption.textContent = item.name;
+        prevBtn.style.display = currentItems.length > 1 ? '' : 'none';
+        nextBtn.style.display = currentItems.length > 1 ? '' : 'none';
+    }
+
+    function navigate(dir) {
+        currentIndex = (currentIndex + dir + currentItems.length) % currentItems.length;
+        showCurrent();
+    }
+
+    closeBtn.addEventListener('click', closeLightbox);
+    prevBtn.addEventListener('click', () => navigate(-1));
+    nextBtn.addEventListener('click', () => navigate(1));
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeLightbox();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (!overlay.classList.contains('active')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') navigate(-1);
+        if (e.key === 'ArrowRight') navigate(1);
+    });
+
+    // Delegate click on image file items (lightbox)
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.doc-file-delete')) return;
+        const item = e.target.closest('.doc-file-item[data-lightbox-url]');
+        if (!item) return;
+        const list = item.closest('.doc-files-list');
+        if (!list) return;
+        const allImageItems = Array.from(list.querySelectorAll('.doc-file-item[data-lightbox-url]'));
+        const items = allImageItems.map(el => ({
+            url: el.dataset.lightboxUrl,
+            name: el.dataset.fileName
+        }));
+        const index = allImageItems.indexOf(item);
+        openLightbox(items, index);
+    });
+
+    window._openLightbox = openLightbox;
+})();
 
 // ===== Global utility =====
 function escapeHtml(str) {

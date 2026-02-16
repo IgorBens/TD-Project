@@ -48,6 +48,7 @@
                     <strong id="projectInfoNaam"></strong>
                     <span id="projectInfoAdres" class="project-adres"></span>
                 </div>
+                <a id="projectDirectLink" class="project-direct-link" href="#" target="_blank" title="Directe link naar dit project">&#x1F517;</a>
             </div>
         </div>
 
@@ -197,6 +198,15 @@
                 <p class="rv-empty">Laad een project en vul de invoer tab in om de documentenstructuur te zien.</p>
             </div>
         </div>
+    </div>
+
+    <!-- Lightbox overlay -->
+    <div class="lightbox-overlay" id="lightboxOverlay">
+        <button class="lightbox-close" id="lightboxClose">&times;</button>
+        <button class="lightbox-nav lightbox-prev" id="lightboxPrev">&#8249;</button>
+        <img class="lightbox-img" id="lightboxImg" src="" alt="">
+        <button class="lightbox-nav lightbox-next" id="lightboxNext">&#8250;</button>
+        <div class="lightbox-caption" id="lightboxCaption"></div>
     </div>
 
     <script src="app.js"></script>

@@ -1,0 +1,92 @@
+{
+  "name": "Thermoduct - List Project Folders",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "thermoduct-folders",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f1a2b3c4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-folders"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuratie\nconst NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst projectId = $input.first().json.query?.project_id || '';\nif (!projectId) throw new Error('Geen project_id opgegeven.');\n\n// We gebruiken het project_id als mapnaam op de NAS\nconst projectPath = `${NAS_BASE_PATH}/${projectId}`;\n\nreturn [{ json: { projectId, projectPath } }];"
+      },
+      "id": "f1a2b3c4-0001-4000-8000-000000000002",
+      "name": "Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "command": "={{ `PROJECT_PATH='${$json.projectPath}'; if [ ! -d \"$PROJECT_PATH\" ]; then echo '{\"exists\":false,\"folders\":[]}'; exit 0; fi; echo '{\"exists\":true,\"folders\":['; FIRST=true; find \"$PROJECT_PATH\" -mindepth 1 -type d | sort | while read -r dir; do REL=$(echo \"$dir\" | sed \"s|$PROJECT_PATH/||\"); DEPTH=$(echo \"$REL\" | tr '/' '\\\\n' | wc -l); NAME=$(basename \"$dir\"); if [ \"$FIRST\" = true ]; then FIRST=false; else echo ','; fi; echo \"{\\\\\"path\\\\\":\\\\\"$REL\\\\\",\\\\\"name\\\\\":\\\\\"$NAME\\\\\",\\\\\"depth\\\\\":$DEPTH}\"; done; echo ']}';` }}",
+        "options": {}
+      },
+      "id": "f1a2b3c4-0001-4000-8000-000000000003",
+      "name": "List Folders",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst stdout = (result.stdout || '').trim();\nconst setup = $('Setup').first().json;\n\ntry {\n  const parsed = JSON.parse(stdout);\n  \n  if (!parsed.exists) {\n    return [{ json: { success: true, exists: false, project_id: setup.projectId, tree: [] } }];\n  }\n  \n  // Bouw een boomstructuur: gebouw > verdiep > collector\n  const folders = parsed.folders || [];\n  const tree = [];\n  const gebouwMap = {};\n  const verdiepMap = {};\n  \n  for (const f of folders) {\n    const parts = f.path.split('/');\n    if (parts.length === 1) {\n      // Gebouw level\n      const gebouw = { name: parts[0], path: f.path, verdiepen: [] };\n      tree.push(gebouw);\n      gebouwMap[parts[0]] = gebouw;\n    } else if (parts.length === 2) {\n      // Verdiep level\n      const parent = gebouwMap[parts[0]];\n      if (parent) {\n        const verdiep = { name: parts[1], path: f.path, collectoren: [] };\n        parent.verdiepen.push(verdiep);\n        verdiepMap[f.path] = verdiep;\n      }\n    } else if (parts.length === 3) {\n      // Collector level\n      const parentPath = parts[0] + '/' + parts[1];\n      const parent = verdiepMap[parentPath];\n      if (parent) {\n        parent.collectoren.push({ name: parts[2], path: f.path });\n      }\n    }\n  }\n  \n  return [{ json: { success: true, exists: true, project_id: setup.projectId, tree } }];\n} catch (e) {\n  return [{ json: { success: false, error: 'Kan mappen niet lezen: ' + e.message, project_id: setup.projectId } }];\n}"
+      },
+      "id": "f1a2b3c4-0001-4000-8000-000000000004",
+      "name": "Build Tree",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "f1a2b3c4-0001-4000-8000-000000000005",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Setup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Setup": {
+      "main": [
+        [{ "node": "List Folders", "type": "main", "index": 0 }]
+      ]
+    },
+    "List Folders": {
+      "main": [
+        [{ "node": "Build Tree", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Tree": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}

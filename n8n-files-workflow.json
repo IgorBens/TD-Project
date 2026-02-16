@@ -1,0 +1,92 @@
+{
+  "name": "Thermoduct - List Files",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "thermoduct-files",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "fl1s2t3f4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-files"
+    },
+    {
+      "parameters": {
+        "jsCode": "const NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = input.query?.project_id || '';\nconst folderPath = input.query?.folder_path || '';\n\nif (!projectId || !folderPath) {\n  throw new Error('Geen project_id of folder_path opgegeven.');\n}\n\nif (folderPath.includes('..') || folderPath.startsWith('/')) {\n  throw new Error('Ongeldig pad.');\n}\n\nconst targetDir = `${NAS_BASE_PATH}/${projectId}/${folderPath}`;\n\nreturn [{ json: { projectId, folderPath, targetDir } }];"
+      },
+      "id": "fl1s2t3f4-0001-4000-8000-000000000002",
+      "name": "Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "command": "={{ `TARGET='${$json.targetDir}'; if [ ! -d \"$TARGET\" ]; then echo '{\"exists\":false,\"files\":[]}'; exit 0; fi; echo '{\"exists\":true,\"files\":['; FIRST=true; for f in \"$TARGET\"/*; do [ -f \"$f\" ] || continue; NAME=$(basename \"$f\"); SIZE=$(stat -c%s \"$f\" 2>/dev/null || echo 0); if [ \"$FIRST\" = true ]; then FIRST=false; else echo ','; fi; echo \"{\\\\\"name\\\\\":\\\\\"$NAME\\\\\",\\\\\"size\\\\\":$SIZE}\"; done; echo ']}';` }}",
+        "options": {}
+      },
+      "id": "fl1s2t3f4-0001-4000-8000-000000000003",
+      "name": "List Files",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst stdout = (result.stdout || '').trim();\nconst setup = $('Setup').first().json;\n\ntry {\n  const parsed = JSON.parse(stdout);\n  return [{ json: { success: true, folder_path: setup.folderPath, ...parsed } }];\n} catch (e) {\n  return [{ json: { success: false, error: 'Kan bestanden niet lezen: ' + e.message } }];\n}"
+      },
+      "id": "fl1s2t3f4-0001-4000-8000-000000000004",
+      "name": "Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "fl1s2t3f4-0001-4000-8000-000000000005",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Setup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Setup": {
+      "main": [
+        [{ "node": "List Files", "type": "main", "index": 0 }]
+      ]
+    },
+    "List Files": {
+      "main": [
+        [{ "node": "Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Response": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}

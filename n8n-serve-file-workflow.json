@@ -1,0 +1,88 @@
+{
+  "name": "Thermoduct - Serve File",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "thermoduct-serve-file",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "sf1a2b3c-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-serve-file"
+    },
+    {
+      "parameters": {
+        "jsCode": "const NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = input.query?.project_id || '';\nconst folderPath = input.query?.folder_path || '';\nconst fileName = input.query?.file_name || '';\n\nif (!projectId || !folderPath || !fileName) {\n  throw new Error('Missende parameters.');\n}\n\nif (folderPath.includes('..') || folderPath.startsWith('/') || fileName.includes('..') || fileName.includes('/')) {\n  throw new Error('Ongeldig pad.');\n}\n\nconst filePath = `${NAS_BASE_PATH}/${projectId}/${folderPath}/${fileName}`;\n\nreturn [{ json: { filePath, fileName } }];"
+      },
+      "id": "sf1a2b3c-0001-4000-8000-000000000002",
+      "name": "Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileName": "={{ $json.filePath }}",
+        "dataPropertyName": "file",
+        "options": {}
+      },
+      "id": "sf1a2b3c-0001-4000-8000-000000000003",
+      "name": "Read File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "responseBinaryPropertyName": "file",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "public, max-age=3600"
+              }
+            ]
+          }
+        }
+      },
+      "id": "sf1a2b3c-0001-4000-8000-000000000004",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Setup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Setup": {
+      "main": [
+        [{ "node": "Read File", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read File": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}

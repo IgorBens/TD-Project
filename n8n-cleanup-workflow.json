@@ -1,0 +1,189 @@
+{
+  "name": "Thermoduct - NAS Cleanup",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "thermoduct-cleanup",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "thermoduct-cleanup"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// Configuratie — pas deze waarden aan!\n// ============================================\nconst ODOO_URL = 'https://jouw-odoo-url.com';\nconst ODOO_DB = 'jouw-database';\nconst ODOO_USER = 'admin';\nconst ODOO_PASSWORD = 'jouw-api-key';\n\n// NAS configuratie\nconst NAS_BASE_PATH = '/home/node/n8n-files/projects';\n\nconst input = $input.first().json;\nconst projectId = parseInt(input.body?.project_id || input.project_id) || null;\nconst projectNaam = input.body?.project_naam || input.project_naam || '';\n\nif (!projectId) {\n  throw new Error('Geen project_id opgegeven.');\n}\n\nreturn [{\n  json: {\n    config: { url: ODOO_URL, db: ODOO_DB, user: ODOO_USER, password: ODOO_PASSWORD },\n    projectId,\n    projectNaam,\n    nasBasePath: NAS_BASE_PATH,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 1,\n      method: 'call',\n      params: {\n        service: 'common',\n        method: 'authenticate',\n        args: [ODOO_DB, ODOO_USER, ODOO_PASSWORD, {}]\n      }\n    }\n  }\n}];"
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Setup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.url }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Odoo Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bouw request om alle taken van het project op te halen\nconst authResponse = $input.first().json;\nconst uid = authResponse.result;\nif (!uid) throw new Error('Odoo authenticatie mislukt!');\n\nconst setup = $('Setup').first().json;\nconst { config, projectId } = setup;\n\nreturn [{\n  json: {\n    config, uid, projectId,\n    rpc: {\n      jsonrpc: '2.0',\n      id: 2,\n      method: 'call',\n      params: {\n        service: 'object',\n        method: 'execute_kw',\n        args: [\n          config.db, uid, config.password,\n          'project.task', 'search_read',\n          [[['project_id', '=', projectId]]],\n          { fields: ['name', 'stage_id', 'parent_id', 'description'] }\n        ]\n      }\n    }\n  }\n}];"
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Prep Read Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config.url }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000005",
+      "name": "Read Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bouw de geneste structuur en genereer verwachte NAS mappen\nconst tasksResponse = $input.first().json;\nconst tasks = tasksResponse.result || [];\n\nconst setup = $('Setup').first().json;\nconst { projectId, projectNaam, nasBasePath } = setup;\n\n// Helpers\nconst getStage = (t) => Array.isArray(t.stage_id) ? t.stage_id[1] : '';\nconst getParentId = (t) => {\n  if (Array.isArray(t.parent_id)) return t.parent_id[0];\n  if (typeof t.parent_id === 'number') return t.parent_id;\n  return null;\n};\nconst safe = (str) => String(str).replace(/[^a-zA-Z0-9._-]/g, '_');\n\n// Categoriseer taken\nconst blokken = tasks.filter(t => getStage(t) === 'Blokken');\nconst verdiepen = tasks.filter(t => getStage(t) === 'Verdiepen');\nconst collectoren = tasks.filter(t => getStage(t) === 'Collectoren');\n\n// Helper: parse nummer uit description\nconst parseDesc = (desc) => {\n  if (!desc) return {};\n  try {\n    const clean = desc.replace(/<[^>]*>/g, '').trim();\n    const parsed = JSON.parse(clean);\n    if (parsed._td) return parsed;\n  } catch (e) {}\n  return {};\n};\n\n// Bouw lijst van verwachte mappaden op de NAS\n// Pad structuur: {basePath}/{projectNaam}/{gebouwNaam}/{verdiepNr}/Collector_{nr}\nconst projectPath = `${nasBasePath}/${safe(projectNaam)}`;\nconst verwachtePaden = new Set();\nverwachtePaden.add(projectPath);\n\nfor (const gebouw of blokken) {\n  const gebouwPath = `${projectPath}/${safe(gebouw.name)}`;\n  verwachtePaden.add(gebouwPath);\n\n  const gebouwVerdiepen = verdiepen.filter(v => getParentId(v) === gebouw.id);\n  for (const verdiep of gebouwVerdiepen) {\n    const numMatch = (verdiep.name || '').match(/Verdieping\\s*([+-]?\\d+)/);\n    const verdiepNr = numMatch ? numMatch[1] : '0';\n    const verdiepPath = `${gebouwPath}/${safe(verdiepNr)}`;\n    verwachtePaden.add(verdiepPath);\n\n    const verdiepCollectoren = collectoren.filter(c => getParentId(c) === verdiep.id);\n    for (const collector of verdiepCollectoren) {\n      const extra = parseDesc(collector.description);\n      const colNumMatch = (collector.name || '').match(/Collector\\s*(\\d+)/);\n      const colNr = extra.nummer || (colNumMatch ? colNumMatch[1] : '1');\n      const collectorPath = `${verdiepPath}/Collector_${safe(String(colNr))}`;\n      verwachtePaden.add(collectorPath);\n    }\n  }\n}\n\nreturn [{\n  json: {\n    projectPath,\n    verwachtePaden: [...verwachtePaden],\n    aantalVerwacht: verwachtePaden.size\n  }\n}];"
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000006",
+      "name": "Build Verwachte Paden",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Genereer een eenvoudig cleanup command\n// Strategie: schrijf verwachte paden naar een temp bestand,\n// dan find + grep om overtollige mappen te vinden en verwijderen\nconst data = $input.first().json;\nconst { projectPath, verwachtePaden } = data;\n\n// Bouw een reeks rm -rf commands voor mappen die NIET verwacht zijn\n// We doen dit slim: genereer een script dat:\n// 1. Alle bestaande mappen oplijst\n// 2. Per map checkt of die in de verwachte lijst zit\n// 3. Zo niet: verwijdert (diepste eerst)\nconst verwachteSetStr = verwachtePaden.join('\\n');\n\nconst script = [\n  // Controleer of projectmap bestaat\n  `if [ ! -d '${projectPath}' ]; then echo 'GEEN_MAP'; exit 0; fi`,\n  // Schrijf verwachte paden naar temp bestand\n  `TMPFILE=$(mktemp)`,\n  `cat > \"$TMPFILE\" << 'VERWACHT_EOF'`,\n  verwachteSetStr,\n  `VERWACHT_EOF`,\n  // Vind en verwijder overtollige mappen (diepste eerst)\n  `DELETED=\"\"`,\n  `for dir in $(find '${projectPath}' -mindepth 1 -type d | sort -r); do`,\n  `  if ! grep -qxF \"$dir\" \"$TMPFILE\"; then`,\n  `    rm -rf \"$dir\"`,\n  `    DELETED=\"$DELETED$dir\\n\"`,\n  `  fi`,\n  `done`,\n  `rm -f \"$TMPFILE\"`,\n  // Output verwijderde mappen (of 'GEEN' als er niks verwijderd is)\n  `if [ -z \"$DELETED\" ]; then echo 'GEEN'; else echo -e \"$DELETED\"; fi`\n].join('\\n');\n\nreturn [{\n  json: {\n    projectPath,\n    verwachtePaden,\n    command: script\n  }\n}];"
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000007",
+      "name": "Build Cleanup Script",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "command": "={{ $json.command }}",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000008",
+      "name": "Execute Cleanup",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verwerk het resultaat van de cleanup\nconst sshResult = $input.first().json;\nconst stdout = (sshResult.stdout || sshResult.result || '').trim();\n\nconst buildData = $('Build Verwachte Paden').first().json;\n\nlet deleted = [];\nlet message = '';\n\nif (stdout === 'GEEN_MAP') {\n  message = 'Projectmap bestaat nog niet op NAS';\n} else if (stdout === 'GEEN') {\n  message = 'Geen overtollige mappen gevonden';\n} else {\n  deleted = stdout.split('\\n').filter(line => line.trim().length > 0);\n  message = `${deleted.length} overtollige map(pen) verwijderd`;\n}\n\nreturn [{\n  json: {\n    success: true,\n    action: 'cleanup',\n    verwachteMappen: buildData.aantalVerwacht,\n    verwijderdeMappen: deleted.length,\n    verwijderd: deleted,\n    message\n  }\n}];"
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000009",
+      "name": "Cleanup Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000010",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1980, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Setup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Setup": {
+      "main": [
+        [{ "node": "Odoo Auth", "type": "main", "index": 0 }]
+      ]
+    },
+    "Odoo Auth": {
+      "main": [
+        [{ "node": "Prep Read Tasks", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Read Tasks": {
+      "main": [
+        [{ "node": "Read Tasks", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Tasks": {
+      "main": [
+        [{ "node": "Build Verwachte Paden", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Verwachte Paden": {
+      "main": [
+        [{ "node": "Build Cleanup Script", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Cleanup Script": {
+      "main": [
+        [{ "node": "Execute Cleanup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute Cleanup": {
+      "main": [
+        [{ "node": "Cleanup Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cleanup Response": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": false
+}
