@@ -800,17 +800,29 @@ function initApp() {
             return;
         }
 
-        // Detecteer of het een S-nummer is (bijv. S26316869, s26316869, of gewoon 26316869 met S-prefix detectie)
-        // Een S-nummer begint met S/s gevolgd door cijfers, of is puur numeriek maar > 8 cijfers (sale order range)
+        // Detecteer type invoer:
+        // S26316869 → zoek op sale order naam
+        // P25314353 → gebruik als project ID (strip de P)
+        // 123       → gebruik als project ID
         const isSNummer = /^[sS]\d+$/.test(inputVal);
-        const isNumeric = /^\d+$/.test(inputVal) && !isSNummer;
-        const queryParam = isSNummer
-            ? `search=${encodeURIComponent(inputVal.toUpperCase())}`
-            : isNumeric
-                ? `project_id=${encodeURIComponent(inputVal)}`
-                : `search=${encodeURIComponent(inputVal)}`;
+        const isPNummer = /^[pP]\d+$/.test(inputVal);
+        const isNumeric = /^\d+$/.test(inputVal);
 
-        selectedProject = { id: isNumeric ? parseInt(inputVal) : null, naam: '', adres: '' };
+        let queryParam;
+        let knownProjectId = null;
+        if (isSNummer) {
+            queryParam = `search=${encodeURIComponent(inputVal.toUpperCase())}`;
+        } else if (isPNummer) {
+            knownProjectId = parseInt(inputVal.slice(1));
+            queryParam = `project_id=${knownProjectId}`;
+        } else if (isNumeric) {
+            knownProjectId = parseInt(inputVal);
+            queryParam = `project_id=${knownProjectId}`;
+        } else {
+            queryParam = `search=${encodeURIComponent(inputVal)}`;
+        }
+
+        selectedProject = { id: knownProjectId, naam: '', adres: '' };
         btnLaden.disabled = true;
         btnLaden.textContent = 'Laden...';
 
