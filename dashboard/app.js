@@ -800,11 +800,15 @@ function initApp() {
             return;
         }
 
-        // Detecteer of het een numeriek ID of een S-nummer is
-        const isNumeric = /^\d+$/.test(inputVal);
-        const queryParam = isNumeric
-            ? `project_id=${encodeURIComponent(inputVal)}`
-            : `search=${encodeURIComponent(inputVal)}`;
+        // Detecteer of het een S-nummer is (bijv. S26316869, s26316869, of gewoon 26316869 met S-prefix detectie)
+        // Een S-nummer begint met S/s gevolgd door cijfers, of is puur numeriek maar > 8 cijfers (sale order range)
+        const isSNummer = /^[sS]\d+$/.test(inputVal);
+        const isNumeric = /^\d+$/.test(inputVal) && !isSNummer;
+        const queryParam = isSNummer
+            ? `search=${encodeURIComponent(inputVal.toUpperCase())}`
+            : isNumeric
+                ? `project_id=${encodeURIComponent(inputVal)}`
+                : `search=${encodeURIComponent(inputVal)}`;
 
         selectedProject = { id: isNumeric ? parseInt(inputVal) : null, naam: '', adres: '' };
         btnLaden.disabled = true;
